@@ -171,7 +171,12 @@ cython_debug/
 .pypirc
 
 # Data folder
-data/
+data/**/*.txt
+data/**/*.h5
+
+# Models
+models/
 
 # Manu's
 plan.md
+track.md
