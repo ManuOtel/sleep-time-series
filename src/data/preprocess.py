@@ -5,7 +5,7 @@ The main purpose is to trim the data streams to only include relevant time perio
 This reduces the data size by removing periods far from sleep episodes.
 
 The module contains a DataPreprocessor class that:
-    1. Takes formatted HDF5 files as input 
+    1. Takes formatted HDF5 files as input
     2. Trims each data stream to a window around the sleep labels
     3. Saves the trimmed data in a new HDF5 file
     4. Processes entire dataset maintaining same structure
@@ -27,7 +27,7 @@ class TqdmLoggingHandler(logging.Handler):
         try:
             msg = self.format(record)
             tqdm.write(msg)
-            self.flush()
+            # self.flush()
         except Exception:
             self.handleError(record)
 
@@ -48,17 +48,46 @@ class DataPreprocessor:
     """Preprocesses formatted HDF5 files by trimming to relevant time periods"""
 
     def __init__(self, data_dir: str, output_dir: str):
+        """Initialize the DataPreprocessor.
+
+        This constructor sets up a DataPreprocessor instance by:
+        1. Creating a DataReader to load the raw data files
+        2. Setting up the output directory for preprocessed files
+        3. Creating the output directory if it doesn't exist
+
+        Args:
+            data_dir: Path to directory containing the raw data files
+            output_dir: Path where preprocessed files will be saved
+
+        Note:
+            The output directory will be created if it doesn't exist,
+            including any necessary parent directories.
+        """
         self.data_reader = DataReader(data_dir)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Initialized DataPreprocessor with data_dir={
                     data_dir} and output_dir={output_dir}")
 
-    def trim_data_to_labels(self, timestamps: np.ndarray, values: np.ndarray,
-                            first_label_time: float, last_label_time: float,
-                            before_window: float = 0,  # 5 minutes in seconds
-                            after_window: float = 0):  # 5 minutes in seconds
-        """Trim data to a window around the labels period"""
+    def _trim_data_to_labels(self, timestamps: np.ndarray, values: np.ndarray,
+                             first_label_time: float, last_label_time: float,
+                             before_window: float = 0,
+                             after_window: float = 0) -> tuple[np.ndarray, np.ndarray]:
+        """Trim data arrays to a window around the labels period.
+
+        Args:
+            timestamps: Array of timestamps for the data points
+            values: Array of corresponding data values (1D or 2D)
+            first_label_time: Start time of the label period
+            last_label_time: End time of the label period
+            before_window: Time in seconds to include before first label (default: 0)
+            after_window: Time in seconds to include after last label (default: 0)
+
+        Returns:
+            tuple containing:
+                - np.ndarray: Trimmed timestamps array
+                - np.ndarray: Trimmed values array (same shape as input values)
+        """
         start_time = first_label_time - before_window
         end_time = last_label_time + after_window
 
@@ -67,7 +96,7 @@ class DataPreprocessor:
 
         return timestamps[mask], values[mask] if len(values.shape) == 1 else values[mask, :]
 
-    def fix_monotonic_timestamps(self, timestamps: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def _fix_monotonic_timestamps(self, timestamps: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Fix non-monotonic timestamps by sorting both timestamps and values arrays.
 
         Args:
@@ -88,8 +117,8 @@ class DataPreprocessor:
         logger.info("Fixed non-monotonic timestamps by sorting")
         return sorted_timestamps, sorted_values
 
-    def fix_unrealistic_hr_changes(self, timestamps: np.ndarray, values: np.ndarray,
-                                   max_change: int = 100) -> tuple[np.ndarray, np.ndarray]:
+    def _fix_unrealistic_hr_changes(self, timestamps: np.ndarray, values: np.ndarray,
+                                    max_change: int = 100) -> tuple[np.ndarray, np.ndarray]:
         """Fix unrealistic heart rate changes by interpolating between valid values.
 
         When heart rate changes exceed the maximum allowed change between consecutive readings,
@@ -130,10 +159,10 @@ class DataPreprocessor:
         logger.info(f"Fixed {len(invalid_idx)} unrealistic heart rate changes")
         return timestamps, smoothed_values
 
-    def resample_timeseries(self, timestamps: np.ndarray, values: np.ndarray,
-                            target_interval: float,
-                            method: str = 'linear',
-                            max_gap: float = None) -> tuple[np.ndarray, np.ndarray]:
+    def _resample_timeseries(self, timestamps: np.ndarray, values: np.ndarray,
+                             target_interval: float,
+                             method: str = 'linear',
+                             max_gap: float = None) -> tuple[np.ndarray, np.ndarray]:
         """Resample time series data to a target interval.
 
         Args:
@@ -141,16 +170,16 @@ class DataPreprocessor:
             values: Array of values corresponding to timestamps
             target_interval: Desired interval between samples in seconds
             method: Method for interpolation:
-                   'linear' - Linear interpolation (good for continuous data like HR)
-                   'cubic' - Cubic interpolation (good for smooth continuous data)
-                   'ffill' - Forward fill (good for categorical data)
-                   'nearest' - Nearest neighbor (good for discrete data like steps)
-                   'zero' - Zero interpolation (good for sparse event data like steps)
-            max_gap: Maximum gap (in seconds) to interpolate across. Gaps larger than
+                   'linear' - Linear interpolation(good for continuous data like HR)
+                   'cubic' - Cubic interpolation(good for smooth continuous data)
+                   'ffill' - Forward fill(good for categorical data)
+                   'nearest' - Nearest neighbor(good for discrete data like steps)
+                   'zero' - Zero interpolation(good for sparse event data like steps)
+            max_gap: Maximum gap ( in seconds) to interpolate across. Gaps larger than
                     this will be filled with NaN.
 
         Returns:
-            Tuple of (resampled timestamps array, resampled values array)
+            Tuple of(resampled timestamps array, resampled values array)
         """
         if len(timestamps) < 2:
             return timestamps, values
@@ -241,8 +270,8 @@ class DataPreprocessor:
 
         return new_timestamps, new_values
 
-    def fix_motion_range(self, timestamps: np.ndarray, values: np.ndarray,
-                         motion_range: tuple[float, float] = (-10, 10)) -> tuple[np.ndarray, np.ndarray]:
+    def _fix_motion_range(self, timestamps: np.ndarray, values: np.ndarray,
+                          motion_range: tuple[float, float] = (-10, 10)) -> tuple[np.ndarray, np.ndarray]:
         """Fix motion values that are outside the expected range by clipping.
 
         Args:
@@ -251,7 +280,7 @@ class DataPreprocessor:
             motion_range: Valid range for motion values as (min, max) tuple
 
         Returns:
-            Tuple of (timestamps array, clipped values array)
+            Tuple of(timestamps array, clipped values array)
         """
         # Find values outside valid range
         invalid_mask = ((values < motion_range[0]) | (
@@ -268,17 +297,17 @@ class DataPreprocessor:
                     motion_range[0]}, {motion_range[1]}]")
         return timestamps, clipped_values
 
-    def generate_empty_steps_data(self, start_time: float, end_time: float,
-                                  sampling_rate: float = 0.002) -> tuple[np.ndarray, np.ndarray]:
+    def _generate_empty_steps_data(self, start_time: float, end_time: float,
+                                   sampling_rate: float = 0.002) -> tuple[np.ndarray, np.ndarray]:
         """Generate synthetic steps data filled with zeros when original data is empty
 
         Args:
             start_time: Start timestamp for synthetic data
-            end_time: End timestamp for synthetic data  
-            sampling_rate: Desired sampling rate in Hz (default 0.002 Hz from info.py)
+            end_time: End timestamp for synthetic data
+            sampling_rate: Desired sampling rate in Hz(default 0.002 Hz from info.py)
 
         Returns:
-            Tuple of (timestamps array, values array) for synthetic steps data
+            Tuple of(timestamps array, values array) for synthetic steps data
         """
         # Calculate number of samples needed
         duration = end_time - start_time
@@ -294,20 +323,18 @@ class DataPreprocessor:
                     num_samples} points")
         return timestamps, values
 
-    def fix_invalid_labels(self,
-                           timestamps: np.ndarray,
-                           values: np.ndarray,
-                           min_duration: float = 120.0) -> tuple[np.ndarray, np.ndarray]:
-        """Fix invalid labels (-1) and remove short duration label changes.
-        Also maps label 5 to 4 to ensure consistent label range [0-4].
+    def _fix_invalid_labels(self, timestamps: np.ndarray, values: np.ndarray,
+                            min_duration: float = 120.0) -> tuple[np.ndarray, np.ndarray]:
+        """Fix invalid labels(-1) and remove short duration label changes.
+        Also maps label 5 to 4 to ensure consistent label range[0-4].
 
         Args:
             timestamps: Array of label timestamps
-            values: Array of label values where -1 indicates invalid labels
+            values: Array of label values where - 1 indicates invalid labels
             min_duration: Minimum duration in seconds for a label change to be kept
 
         Returns:
-            Tuple of (timestamps array, fixed values array)
+            Tuple of(timestamps array, fixed values array)
         """
         if len(values) == 0:
             return timestamps, values
@@ -358,8 +385,46 @@ class DataPreprocessor:
             f"Fixed {num_invalid} invalid labels and smoothed {num_smoothed-num_invalid} short duration changes")
         return timestamps, fixed_values
 
-    def preprocess_subject_data(self, subject_id: str):
-        """Preprocess and save all data streams for a subject"""
+    def _normalize_data(self, data: np.ndarray, mean: float = None, std: float = None) -> np.ndarray:
+        """Normalize data using mean and standard deviation
+
+        Args:
+            data: Array to normalize
+            mean: Optional mean value to use. If None, computed from data
+            std: Optional standard deviation to use. If None, computed from data
+
+        Returns:
+            Normalized array
+        """
+        if mean is None:
+            mean = np.mean(data)
+        if std is None:
+            std = np.std(data)
+        return (data - mean) / std
+
+    def preprocess_subject_data(self, subject_id: str) -> None:
+        """Preprocess and save all data streams for a subject.
+
+        This function:
+        1. Reads raw heart rate, motion, steps and sleep label data for the subject
+        2. Trims data streams to relevant time periods around sleep labels
+        3. Fixes invalid values and non-monotonic timestamps
+        4. Resamples data to consistent frequencies:
+           - Labels: 1/30 Hz (every 30 seconds)
+           - Heart rate: 0.2 Hz (every 5 seconds)
+           - Motion/steps: Original frequency
+        5. Saves preprocessed data to HDF5 file
+
+        Args:
+            subject_id (str): Unique identifier for the subject to process
+
+        Returns:
+            None
+
+        Raises:
+            FileNotFoundError: If raw data files for subject cannot be found
+            ValueError: If data streams contain invalid values that cannot be fixed
+        """
         logger.info(f"Starting preprocessing for subject {subject_id}")
 
         output_file = self.output_dir / f"{subject_id}.h5"
@@ -379,17 +444,17 @@ class DataPreprocessor:
             # Trim each data stream
             with h5py.File(output_file, 'w') as hf:
                 # Trim labels to first and last label times
-                label_times, label_vals = self.trim_data_to_labels(
+                label_times, label_vals = self._trim_data_to_labels(
                     labels_data.timestamps, labels_data.values,
                     first_label_time, last_label_time
                 )
 
                 # Fix any invalid labels (-1) using nearest neighbor interpolation
-                label_times, label_vals = self.fix_invalid_labels(
+                label_times, label_vals = self._fix_invalid_labels(
                     label_times, label_vals)
 
                 # Resample labels to 1/30 Hz (every 30 seconds)
-                label_times, label_vals = self.resample_timeseries(
+                label_times, label_vals = self._resample_timeseries(
                     label_times, label_vals,
                     target_interval=30.0,
                     method='nearest'
@@ -398,39 +463,43 @@ class DataPreprocessor:
                 hf.create_dataset('labels/values', data=label_vals)
 
                 # Process and save heart rate
-                hr_times, hr_vals = self.trim_data_to_labels(
+                hr_times, hr_vals = self._trim_data_to_labels(
                     hr_data.timestamps, hr_data.values,
                     first_label_time, last_label_time
                 )
-                hr_times, hr_vals = self.fix_monotonic_timestamps(
+                hr_times, hr_vals = self._fix_monotonic_timestamps(
                     hr_times, hr_vals)
-                hr_times, hr_vals = self.fix_unrealistic_hr_changes(
+                hr_times, hr_vals = self._fix_unrealistic_hr_changes(
                     hr_times, hr_vals)
 
                 # Resample heart rate to 0.2 Hz
-                hr_times, hr_vals = self.resample_timeseries(
+                hr_times, hr_vals = self._resample_timeseries(
                     hr_times, hr_vals,
                     target_interval=5.0,
                     method='nearest'
                 )
+
+                # Normalize heart rate data
+                hr_vals = self._normalize_data(hr_vals)
+
                 hf.create_dataset('heart_rate/timestamps', data=hr_times)
                 hf.create_dataset('heart_rate/values', data=hr_vals)
                 logger.info(f"Heart rate data reduced from {
                             len(hr_data.timestamps)} to {len(hr_times)} points")
 
                 # Process and save motion
-                motion_times, motion_vals = self.trim_data_to_labels(
+                motion_times, motion_vals = self._trim_data_to_labels(
                     motion_data.timestamps, motion_data.values,
                     first_label_time, last_label_time
                 )
-                motion_times, motion_vals = self.fix_monotonic_timestamps(
+                motion_times, motion_vals = self._fix_monotonic_timestamps(
                     motion_times, motion_vals)
-                motion_times, motion_vals = self.fix_motion_range(
+                motion_times, motion_vals = self._fix_motion_range(
                     motion_times, motion_vals)
 
                 # Resample motion to 5 Hz because it is too much redundant information
                 # leading to overfitting and increased computational cost
-                motion_times, motion_vals = self.resample_timeseries(
+                motion_times, motion_vals = self._resample_timeseries(
                     motion_times, motion_vals,
                     target_interval=0.2,  # 1/5 Hz
                     method='nearest'
@@ -441,19 +510,19 @@ class DataPreprocessor:
                             len(motion_data.timestamps)} to {len(motion_times)} points")
 
                 # Process and save steps
-                steps_times, steps_vals = self.trim_data_to_labels(
+                steps_times, steps_vals = self._trim_data_to_labels(
                     steps_data.timestamps, steps_data.values,
                     first_label_time, last_label_time
                 )
                 if len(steps_times) <= 5:
-                    steps_times, steps_vals = self.generate_empty_steps_data(
+                    steps_times, steps_vals = self._generate_empty_steps_data(
                         first_label_time, last_label_time)
                 else:
-                    steps_times, steps_vals = self.fix_monotonic_timestamps(
+                    steps_times, steps_vals = self._fix_monotonic_timestamps(
                         steps_times, steps_vals)
 
                     # Resample steps to 1/500 Hz (every minute)
-                    steps_times, steps_vals = self.resample_timeseries(
+                    steps_times, steps_vals = self._resample_timeseries(
                         steps_times, steps_vals,
                         target_interval=500.0,
                         method='nearest'
@@ -500,7 +569,6 @@ class DataPreprocessor:
 
 if __name__ == "__main__":
     import argparse
-    from tqdm import tqdm
 
     parser = argparse.ArgumentParser(description='Preprocess formatted data')
     parser.add_argument('--data_dir', type=str, default='./data/formated/',

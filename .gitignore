@@ -177,6 +177,9 @@ data/**/*.h5
 # Models
 models/
 
-# Manu's
+# Manu's Maps
 plan.md
 track.md
+pip_req.py
+check.py
+backup/

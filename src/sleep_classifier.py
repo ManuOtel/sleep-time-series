@@ -1,3 +1,36 @@
+"""
+The main purpose is to classify sleep stages using multimodal physiological data.
+
+The module contains two model architectures for sleep stage classification:
+
+1. SleepClassifierLSTM:
+    - Takes preprocessed heart rate and motion data as input
+    - Uses CNN layers for feature extraction from each modality
+    - Employs bidirectional LSTM layers for temporal modeling
+    - Processes previous labels through an embedding layer
+    - Fuses multimodal features for final classification
+    - Outputs sleep stage predictions (5 classes)
+
+2. SleepClassifierTransformer:
+    - Takes the same preprocessed inputs as the LSTM version
+    - Uses identical CNN feature extractors for each modality
+    - Uses Transformer encoder layers for temporal modeling (no decoder)
+    - The encoder-only architecture focuses on self-attention patterns
+    - Processes previous labels through an embedding layer
+    - Fuses features from all modalities for classification
+    - Outputs sleep stage predictions (5 classes)
+    - Provides interpretable attention weights for analysis
+
+Both architectures share:
+    - CNN-based feature extraction pipelines
+    - Previous label embedding components
+    - Multi-modal feature fusion approach
+    - Final classification head
+
+The LSTM version offers efficient training and good performance on sequential data,
+while the Transformer version can capture more complex temporal dependencies through
+its self-attention mechanism, though using only the encoder portion for simplicity.
+"""
 import torch
 import torch.nn as nn
 
@@ -16,12 +49,12 @@ class SleepClassifierTransformer(nn.Module):
             nn.MaxPool1d(kernel_size=2, stride=2),
         )
 
-        # Simpler transformer with fewer layers and heads
+        # Simpler transformer with fewer layers and heads, only encodder
         self.hr_transformer = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
                 d_model=64,
-                nhead=4,  # Reduced heads
-                dim_feedforward=128,  # Reduced feedforward
+                nhead=4,
+                dim_feedforward=128,
                 dropout=0.1,
                 batch_first=True
             ),
@@ -56,8 +89,16 @@ class SleepClassifierTransformer(nn.Module):
             num_layers=1  # Single layer
         )
 
-        # Previous labels embedding
-        self.label_embedding = nn.Embedding(num_classes, 32)
+        # Previous labels embedding with dropout and batch norm for regularization
+        self.label_embedding = nn.Sequential(
+            nn.Linear(19, 64),  # Wider layer for more capacity
+            nn.BatchNorm1d(64),  # Normalize activations
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.2),  # Prevent overfitting
+            nn.Linear(64, 32),  # Project down to final embedding size
+            nn.BatchNorm1d(32),
+            nn.ReLU(inplace=True)
+        )
 
         # Simpler classifier
         combined_size = 64 + 128 + 1 + 32  # HR + Motion + Steps + Previous Labels
@@ -85,9 +126,9 @@ class SleepClassifierTransformer(nn.Module):
         # Steps processing
         steps_feat = x['steps']
 
-        # Previous labels processing
-        prev_labels = x['previous_labels'][:, -1]  # Take last label
-        label_feat = self.label_embedding(prev_labels)
+        # Previous all 19 labels processing
+        label_feat = self.label_embedding(
+            x['previous_labels'].float())  # [B, 19] -> [B, 32]
 
         # Combine and classify
         combined = torch.cat(
@@ -144,8 +185,16 @@ class SleepClassifierLSTM(nn.Module):
             bidirectional=True
         )
 
-        # Previous labels embedding
-        self.label_embedding = nn.Embedding(num_classes, 32)
+        # Previous labels embedding with dropout and batch norm for regularization
+        self.label_embedding = nn.Sequential(
+            nn.Linear(19, 64),  # Wider layer for more capacity
+            nn.BatchNorm1d(64),  # Normalize activations
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.2),  # Prevent overfitting
+            nn.Linear(64, 32),  # Project down to final embedding size
+            nn.BatchNorm1d(32),
+            nn.ReLU(inplace=True)
+        )
 
         # Simpler classifier
         # HR (32*2) + Motion (64*2) + Steps + Previous Labels
@@ -174,9 +223,9 @@ class SleepClassifierLSTM(nn.Module):
         # Steps processing
         steps_feat = x['steps']
 
-        # Previous labels processing
-        prev_labels = x['previous_labels'][:, -1]  # Take last label
-        label_feat = self.label_embedding(prev_labels)
+        # Previous labels 19 processing
+        label_feat = self.label_embedding(
+            x['previous_labels'].float())  # [B, 19] -> [B, 32]
 
         # Combine and classify
         combined = torch.cat(
@@ -191,7 +240,7 @@ if __name__ == "__main__":
         'heart_rate': torch.randn(batch_size, 120),      # [B, 120]
         'motion': torch.randn(batch_size, 3000, 3),      # [B, 3000, 3]
         'steps': torch.randn(batch_size, 1),             # [B, 1]
-        'previous_labels': torch.randint(0, 4, (batch_size, 1))  # [B, 19]
+        'previous_labels': torch.randint(0, 4, (batch_size, 19))  # [B, 19]
     }
 
     # Test LSTM version

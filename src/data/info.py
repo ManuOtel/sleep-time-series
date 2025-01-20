@@ -1,21 +1,26 @@
 """
-This module analyzes data files to extract key statistical information and characteristics.
+The main purpose is to analyze preprocessed HDF5 data files to extract key statistical information. 
 
-The main purpose is to calculate and summarize important data properties like:
-- Typical sampling rates and gaps in each data stream
-- Value ranges and distributions including skewness
-- Missing data patterns and percentages
-- Recording duration statistics
-
-This information helps establish expected parameters for data validation and processing,
-particularly for handling irregular sampling rates and gaps in the time series data.
+The module contains a DataInfo class that:
+    1. Takes preprocessed HDF5 data files as input
+    2. Performs statistical analysis on each data stream, including:
+        - Missing or corrupted data files
+        - Empty data streams or invalid values
+        - Non-monotonic timestamps and sampling irregularities 
+        - Data gaps and coverage issues
+        - Value range violations
+        - Misaligned endpoints between streams
+        - Inconsistent sampling rates
+    3. Reports detailed statistics and summaries
+    4. Can process individual subjects or entire datasets
+    5. Provides insights for data validation parameters
 """
 
 import json
 import logging
 import numpy as np
-from pathlib import Path
 from scipy import stats
+from pathlib import Path
 from reader import DataReader
 
 logging.basicConfig(
@@ -34,8 +39,26 @@ class DataInfo:
         self.data_dir = Path(data_dir)
         logger.info(f"Initialized DataInfo with data_dir={data_dir}")
 
-    def analyze_time_series_gaps(self, timestamps: np.ndarray) -> dict:
-        """Analyze gaps in time series data"""
+    def _analyze_time_series_gaps(self, timestamps: np.ndarray) -> dict[str, float | dict[str, float] | None]:
+        """Analyze gaps and irregularities in time series data.
+
+        Calculates statistics about gaps and missing data in a time series by analyzing
+        the intervals between consecutive timestamps. Uses the most common interval as
+        the expected sampling rate.
+
+        Args:
+            timestamps: Array of timestamps in seconds
+
+        Returns:
+            Dictionary containing:
+                - gap_stats: Dict with gap statistics (n_gaps, mean_gap, median_gap, std_gap) or None if invalid
+                - missing_pct: Percentage of missing data points (0-100)
+                - largest_gap: Size of largest gap in seconds
+
+        Raises:
+            TypeError: If timestamps is not a numpy array
+            ValueError: If timestamps does not contain numeric values
+        """
         if len(timestamps) <= 1:
             return {
                 'gap_stats': None,
@@ -83,8 +106,22 @@ class DataInfo:
             'largest_gap': float(np.max(time_diffs))
         }
 
-    def analyze_distribution(self, values: np.ndarray) -> dict:
-        """Analyze value distribution including skewness and normality test"""
+    def _analyze_distribution(self, values: np.ndarray) -> dict[str, float | dict[str, float]]:
+        """Analyze the statistical distribution of a numeric data array.
+
+        Calculates skewness to measure asymmetry and performs Kolmogorov-Smirnov test
+        to check for normality of the distribution.
+
+        Args:
+            values: Array of numeric values to analyze
+
+        Returns:
+            dict containing:
+                skewness (float): Measure of distribution asymmetry
+                normality_test (dict): Results of K-S normality test with:
+                    - statistic (float): K-S test statistic
+                    - pvalue (float): p-value of the test
+        """
         if len(values) <= 1:
             return {
                 'skewness': 0,
@@ -105,8 +142,33 @@ class DataInfo:
             }
         }
 
-    def analyze_subject_data(self, subject_id: str) -> dict:
-        """Analyze data streams for a single subject to extract key statistics"""
+    def _analyze_subject_data(self, subject_id: str) -> dict[str, dict[str, int | float | dict]]:
+        """Analyze data streams for a single subject to extract key statistics.
+
+        Processes heart rate, motion, steps and label data streams to compute:
+        - Basic statistics (mean, median, std, min, max)
+        - Sampling rates and data gaps analysis
+        - Distribution statistics (skewness, normality tests)
+
+        Args:
+            subject_id: Unique identifier for the subject to analyze
+
+        Returns:
+            Dictionary containing analysis results for each data stream with structure:
+            {
+                'heart_rate': {
+                    'n_samples': int,
+                    'duration_hours': float,
+                    'basic_stats': dict,
+                    'sampling_rate': float,
+                    'gaps': dict,
+                    'distribution': dict
+                },
+                'motion': {...},
+                'steps': {...},
+                'labels': {...}
+            }
+        """
         stats = {}
         try:
             # Read all data streams
@@ -117,8 +179,8 @@ class DataInfo:
 
             # Heart rate analysis
             if len(hr_data.timestamps) > 1:
-                hr_gaps = self.analyze_time_series_gaps(hr_data.timestamps)
-                hr_dist = self.analyze_distribution(hr_data.values)
+                hr_gaps = self._analyze_time_series_gaps(hr_data.timestamps)
+                hr_dist = self._analyze_distribution(hr_data.values)
                 stats['heart_rate'] = {
                     'n_samples': len(hr_data.timestamps),
                     'duration_hours': (hr_data.timestamps[-1] - hr_data.timestamps[0])/3600,
@@ -138,10 +200,10 @@ class DataInfo:
 
             # Motion analysis
             if len(motion_data.timestamps) > 1:
-                motion_gaps = self.analyze_time_series_gaps(
+                motion_gaps = self._analyze_time_series_gaps(
                     motion_data.timestamps)
                 magnitudes = np.linalg.norm(motion_data.values, axis=1)
-                motion_dist = self.analyze_distribution(magnitudes)
+                motion_dist = self._analyze_distribution(magnitudes)
                 stats['motion'] = {
                     'n_samples': len(motion_data.timestamps),
                     'duration_hours': (motion_data.timestamps[-1] - motion_data.timestamps[0])/3600,
@@ -161,9 +223,9 @@ class DataInfo:
 
             # Steps analysis
             if len(steps_data.timestamps) > 1:
-                steps_gaps = self.analyze_time_series_gaps(
+                steps_gaps = self._analyze_time_series_gaps(
                     steps_data.timestamps)
-                steps_dist = self.analyze_distribution(steps_data.values)
+                steps_dist = self._analyze_distribution(steps_data.values)
                 stats['steps'] = {
                     'n_samples': len(steps_data.timestamps),
                     'duration_hours': (steps_data.timestamps[-1] - steps_data.timestamps[0])/3600,
@@ -182,7 +244,7 @@ class DataInfo:
 
             # Labels analysis
             if len(labels_data.timestamps) > 1:
-                labels_gaps = self.analyze_time_series_gaps(
+                labels_gaps = self._analyze_time_series_gaps(
                     labels_data.timestamps)
                 stats['labels'] = {
                     'n_samples': len(labels_data.timestamps),
@@ -209,48 +271,120 @@ class DataInfo:
 
         return stats
 
-    def analyze_all_subjects(self) -> dict:
-        """Analyze all subjects and compute aggregate statistics including sampling irregularities"""
+    def analyze_all_subjects(self) -> dict[str, dict[str, dict]]:
+        """Analyze all subjects and compute aggregate statistics including sampling irregularities.
+
+        Processes data from all subjects to calculate individual statistics and aggregate metrics.
+        Focuses on sampling irregularities like gaps and missing data patterns across the dataset.
+
+        Returns:
+            Dictionary containing:
+                individual: Dict mapping subject IDs to their individual statistics
+                summary: Dict containing aggregate statistics across all subjects, with:
+                    - Missing data percentages (mean, median, std)
+                    - Gap size statistics
+                    - Distribution metrics like skewness
+        """
         # Read subject IDs
         subject_ids_file = self.data_dir / "subject_ids.json"
-        if not subject_ids_file.exists():
-            raise FileNotFoundError(
-                f"Subject IDs file not found: {subject_ids_file}")
 
-        with open(subject_ids_file, 'r') as f:
-            subject_ids = json.load(f)
+        try:
+            if not subject_ids_file.exists():
+                raise FileNotFoundError(
+                    f"Subject IDs file not found: {subject_ids_file}")
 
-        all_stats = {}
-        aggregate_stats = {
-            'heart_rate': {'missing_pcts': [], 'gap_sizes': [], 'skewness': []},
-            'motion': {'missing_pcts': [], 'gap_sizes': [], 'skewness': []},
-            'steps': {'missing_pcts': [], 'gap_sizes': [], 'skewness': []},
-            'labels': {'missing_pcts': [], 'gap_sizes': []}
-        }
+            with open(subject_ids_file, 'r') as f:
+                try:
+                    subject_ids = json.load(f)
+                except json.JSONDecodeError:
+                    raise ValueError(f"Invalid JSON format in {
+                                     subject_ids_file}")
 
-        for subject_id in subject_ids:
-            stats = self.analyze_subject_data(subject_id)
-            all_stats[subject_id] = stats
+            if not isinstance(subject_ids, list):
+                raise ValueError(
+                    "subject_ids.json must contain a list of subject IDs")
 
-            # Aggregate gap and distribution statistics
-            for stream in ['heart_rate', 'motion', 'steps', 'labels']:
-                if stats[stream]['n_samples'] > 0:
-                    if 'gaps' in stats[stream]:
-                        aggregate_stats[stream]['missing_pcts'].append(
-                            stats[stream]['gaps']['missing_pct'])
-                        aggregate_stats[stream]['gap_sizes'].append(
-                            stats[stream]['gaps']['largest_gap'])
-                    if 'distribution' in stats[stream]:
-                        aggregate_stats[stream]['skewness'].append(
-                            stats[stream]['distribution']['skewness'])
+            all_stats = {}
+            aggregate_stats = {
+                'heart_rate': {'missing_pcts': [], 'gap_sizes': [], 'skewness': []},
+                'motion': {'missing_pcts': [], 'gap_sizes': [], 'skewness': []},
+                'steps': {'missing_pcts': [], 'gap_sizes': [], 'skewness': []},
+                'labels': {'missing_pcts': [], 'gap_sizes': []}
+            }
 
-        # Compute summary including sampling irregularity metrics
-        summary = self.compute_summary_statistics(aggregate_stats)
+            for subject_id in subject_ids:
+                try:
+                    stats = self._analyze_subject_data(subject_id)
+                    all_stats[subject_id] = stats
 
-        return {'individual': all_stats, 'summary': summary}
+                    # Aggregate gap and distribution statistics
+                    for stream in ['heart_rate', 'motion', 'steps', 'labels']:
+                        if stats[stream]['n_samples'] > 0:
+                            if 'gaps' in stats[stream]:
+                                aggregate_stats[stream]['missing_pcts'].append(
+                                    stats[stream]['gaps']['missing_pct'])
+                                aggregate_stats[stream]['gap_sizes'].append(
+                                    stats[stream]['gaps']['largest_gap'])
+                            if 'distribution' in stats[stream]:
+                                aggregate_stats[stream]['skewness'].append(
+                                    stats[stream]['distribution']['skewness'])
+                except Exception as e:
+                    logger.error(f"Error processing subject {
+                                 subject_id}: {str(e)}")
+                    all_stats[subject_id] = {
+                        'heart_rate': {'n_samples': 0},
+                        'motion': {'n_samples': 0},
+                        'steps': {'n_samples': 0},
+                        'labels': {'n_samples': 0},
+                        'error': str(e)
+                    }
 
-    def compute_summary_statistics(self, aggregate_stats: dict) -> dict:
-        """Compute summary statistics with focus on sampling irregularities"""
+            # Compute summary including sampling irregularity metrics
+            summary = self.compute_summary_statistics(aggregate_stats)
+
+            return {'individual': all_stats, 'summary': summary}
+
+        except Exception as e:
+            logger.error(f"Failed to analyze subjects: {str(e)}")
+            raise
+
+    def compute_summary_statistics(self, aggregate_stats: dict[str, dict[str, list[float]]]) -> dict[str, dict[str, dict[str, float]]]:
+        """Compute summary statistics with focus on sampling irregularities across data streams.
+
+        Calculates aggregate statistics for missing data percentages, gap sizes, and distribution 
+        skewness (where applicable) across all subjects for each data stream type.
+
+        Args:
+            aggregate_stats: Dictionary containing aggregated metrics for each stream type with structure:
+                {
+                    'stream_name': {
+                        'missing_pcts': list[float],  # Missing data percentages
+                        'gap_sizes': list[float],     # Gap sizes in seconds
+                        'skewness': list[float]       # Distribution skewness (optional)
+                    }
+                }
+
+        Returns:
+            Dictionary containing summary statistics for each stream type with structure:
+                {
+                    'stream_name': {
+                        'missing_data': {
+                            'mean_pct': float,
+                            'median_pct': float,
+                            'std_pct': float
+                        },
+                        'gap_statistics': {
+                            'mean_gap': float,
+                            'median_gap': float,
+                            'max_gap': float
+                        },
+                        'distribution': {             # Only for numerical streams
+                            'mean_skewness': float,
+                            'median_skewness': float
+                        }
+                    }
+                }
+        """
         summary = {}
 
         for stream in ['heart_rate', 'motion', 'steps', 'labels']:
@@ -278,33 +412,46 @@ class DataInfo:
 
 
 if __name__ == "__main__":
-    analyzer = DataInfo("./data/preprocessed/")
+    import argparse
+    # Set up argument parser
+    parser = argparse.ArgumentParser(
+        description='Analyze data quality metrics')
+    parser.add_argument('--data_dir', type=str, default='./data/preprocessed/',
+                        help='Directory containing preprocessed data')
+    parser.add_argument('--verbose', action='store_true', default=True,
+                        help='Print detailed analysis results')
+    args = parser.parse_args()
+
+    # Initialize analyzer and run analysis
+    analyzer = DataInfo(args.data_dir)
     results = analyzer.analyze_all_subjects()
 
-    print("\nTime Series Analysis Summary")
-    print("=" * 50)
+    if args.verbose:
+        print("\nTime Series Analysis Summary")
+        print("=" * 50)
 
-    summary = results['summary']
-    for stream in ['heart_rate', 'motion', 'steps', 'labels']:
-        print(f"\n{stream.upper()} Data Quality:")
-        print(f"Missing Data:")
-        print(f"  - Mean: {summary[stream]['missing_data']['mean_pct']:.1f}%")
-        print(f"  - Median: {summary[stream]
-              ['missing_data']['median_pct']:.1f}%")
-        print(f"Gap Statistics:")
-        print(f"  - Mean gap: {summary[stream]
-              ['gap_statistics']['mean_gap']:.2f}s")
-        print(f"  - Max gap: {summary[stream]
-              ['gap_statistics']['max_gap']:.2f}s")
-        if 'sampling_rate' in summary[stream]:
-            print(f"Sampling Rate:")
-            print(f"  - {summary[stream]['sampling_rate']:.2f} Hz")
-        if 'distribution' in summary[stream]:
-            print(f"Distribution:")
-            print(
-                f"  - Mean skewness: {summary[stream]['distribution']['mean_skewness']:.3f}")
-            print(
-                f"  - Median skewness: {summary[stream]['distribution']['median_skewness']:.3f}")
+        summary = results['summary']
+        for stream in ['heart_rate', 'motion', 'steps', 'labels']:
+            print(f"\n{stream.upper()} Data Quality:")
+            print(f"Missing Data:")
+            print(f"  - Mean: {summary[stream]
+                  ['missing_data']['mean_pct']:.1f}%")
+            print(f"  - Median: {summary[stream]
+                  ['missing_data']['median_pct']:.1f}%")
+            print(f"Gap Statistics:")
+            print(f"  - Mean gap: {summary[stream]
+                  ['gap_statistics']['mean_gap']:.2f}s")
+            print(f"  - Max gap: {summary[stream]
+                  ['gap_statistics']['max_gap']:.2f}s")
+            if 'sampling_rate' in summary[stream]:
+                print(f"Sampling Rate:")
+                print(f"  - {summary[stream]['sampling_rate']:.2f} Hz")
+            if 'distribution' in summary[stream]:
+                print(f"Distribution:")
+                print(
+                    f"  - Mean skewness: {summary[stream]['distribution']['mean_skewness']:.3f}")
+                print(
+                    f"  - Median skewness: {summary[stream]['distribution']['median_skewness']:.3f}")
 
     #### Print Example ####
 

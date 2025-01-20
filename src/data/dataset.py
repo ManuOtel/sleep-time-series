@@ -1,3 +1,21 @@
+"""
+This module provides a PyTorch Dataset for sleep stage classification using multimodal time series data.
+
+The main purpose is to load and prepare preprocessed sensor data (heart rate, motion, steps) and sleep 
+stage labels for training deep learning models. It handles:
+
+The module contains a SleepDataset class that:
+    1. Takes preprocessed HDF5 data files as input
+    2. Creates fixed-length sequences with configurable stride for sequence models
+    3. Performs configurable validation checks on each data stream, including:
+        - Cross-validation 10-fold splitting
+        - Train/validation/test set creation 
+        - Data normalization and preprocessing
+        - Batch generation for training
+    4. Reports detailed validation failures and statistics
+    5. Can process individual subjects or entire datasets
+"""
+
 import json
 import torch
 import numpy as np
@@ -33,7 +51,26 @@ class SleepDataset(Dataset):
                  train_mode: bool = True,
                  valid_ratio: float = 0.1,
                  seed: int = 42,
-                 split: str = 'train'):
+                 split: str = 'train') -> None:
+        """Initialize the SleepDataset.
+
+        Args:
+            data_dir: Path to directory containing preprocessed HDF5 data files
+            sequence_length: Length of each sequence in samples (default 600 = 5 min at 2 Hz)
+            stride: Number of samples to stride between sequences (default 30 = 30 sec)
+            fold_id: Which cross-validation fold to use as test set (0-9), if None uses all data
+            train_mode: If True, return training fold, if False return test fold
+            valid_ratio: Fraction of training sequences to use for validation (0.0-1.0)
+            seed: Random seed for reproducible data splits
+            split: Which split to return when using validation ('train' or 'valid')
+
+        Returns:
+            None
+
+        Raises:
+            FileNotFoundError: If data directory or subject_ids.json not found
+            ValueError: If invalid fold_id, valid_ratio or split parameters
+        """
 
         # Add number of sleep stages (classes)
         self.num_classes = 5  # Assuming 5 sleep stages (0-4)
@@ -165,8 +202,19 @@ class SleepDataset(Dataset):
             self.sequences = list(self.sequences)
             self.labels = torch.stack(list(self.labels))
 
-    def _adjust_sequence_length(self, seq, target_length):
-        """Adjust sequence to target length by trimming or padding"""
+    def _adjust_sequence_length(self, seq: np.ndarray, target_length: int) -> np.ndarray:
+        """Adjust sequence to target length by trimming or padding with zeros.
+
+        Args:
+            seq: Input sequence array to adjust
+            target_length: Desired length of output sequence
+
+        Returns:
+            Adjusted sequence array with length equal to target_length:
+            - If input is longer than target, returns trimmed sequence
+            - If input is shorter than target, returns zero-padded sequence
+            - If input equals target length, returns unchanged sequence
+        """
         if len(seq) > target_length:
             return seq[:target_length]
         elif len(seq) < target_length:
@@ -185,35 +233,89 @@ class SleepDataset(Dataset):
 
 
 if __name__ == "__main__":
-    # Example usage
-    data_dir = Path("data/preprocessed")
+    import time
+    import argparse
+    from torch.utils.data import DataLoader
 
-    # Create train/test/valid splits
+    # Set up argument parser
+    parser = argparse.ArgumentParser(
+        description='Test dataset loading and processing')
+    parser.add_argument('--data_dir', type=str, default='./data/preprocessed/',
+                        help='Directory containing preprocessed data')
+    parser.add_argument('--fold_id', type=int, default=0,
+                        help='Fold ID for cross validation')
+    parser.add_argument('--batch_size', type=int, default=512,
+                        help='Batch size for data loading')
+    parser.add_argument('--num_workers', type=int, default=4,
+                        help='Number of worker processes for data loading')
+    parser.add_argument('--valid_ratio', type=float, default=0.1,
+                        help='Ratio of validation data split')
+    args = parser.parse_args()
+
+    # Time dataset creation
+    start = time.time()
     train_dataset = SleepDataset(
-        data_dir, fold_id=0, train_mode=True, valid_ratio=0.1, split='train')
+        args.data_dir, fold_id=args.fold_id, train_mode=True,
+        valid_ratio=args.valid_ratio, split='train')
     valid_dataset = SleepDataset(
-        data_dir, fold_id=0, train_mode=True, valid_ratio=0.1, split='valid')
-    test_dataset = SleepDataset(data_dir, fold_id=0, train_mode=False)
+        args.data_dir, fold_id=args.fold_id, train_mode=True,
+        valid_ratio=args.valid_ratio, split='valid')
+    test_dataset = SleepDataset(
+        args.data_dir, fold_id=args.fold_id, train_mode=False)
+    dataset_time = time.time() - start
 
+    print("\nDataset Loading Summary")
+    print("=" * 50)
+    print(f"Dataset creation time: {dataset_time:.2f} seconds")
     print(f"Train sequences: {len(train_dataset)}")
     print(f"Valid sequences: {len(valid_dataset)}")
     print(f"Test sequences: {len(test_dataset)}")
 
+    # Test dataloader speed
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        persistent_workers=True,
+        pin_memory=True
+    )
+
+    start = time.time()
+    for batch_idx, (batch_data, batch_labels) in enumerate(train_loader):
+        if batch_idx % 100 == 0:
+            print(f"Processed {batch_idx} batches...")
+    dataloader_time = time.time() - start
+
+    print("\nDataloader Performance")
+    print("=" * 50)
+    print(f"Time to iterate all batches: {dataloader_time:.2f} seconds")
+    print(f"Average time per batch: {
+          dataloader_time/len(train_loader):.4f} seconds")
+
     # Test a sample
     sequence, label = train_dataset[0]
-    # Should be [120, 1]
-    print(f"\nHeart Rate shape: {sequence['heart_rate'].shape}")
-    print(f"Motion shape: {sequence['motion'].shape}")  # Should be [3000, 3]
-    # Should be [1, 1] or [2, 1]
+    print("\nSequence Structure")
+    print("=" * 50)
+    print(f"Heart Rate shape: {sequence['heart_rate'].shape}")
+    print(f"Motion shape: {sequence['motion'].shape}")
     print(f"Steps shape: {sequence['steps'].shape}")
-    print(f"Previous labels shape: {
-          sequence['previous_labels'].shape}")
+    print(f"Previous labels shape: {sequence['previous_labels'].shape}")
     print(f"Label: {label}")
 
     #### Print Example ####
+    # Dataset creation time: 30.29 seconds
     # Train sequences: 18998
     # Valid sequences: 2110
     # Test sequences: 2297
+    # Processed 0 batches...
+    # Processed 100 batches...
+    # Processed 200 batches...
+    # Processed 300 batches...
+    # Processed 400 batches...
+    # Processed 500 batches...
+
+    # Time to iterate all batches: 82.60 seconds
+    # Average time per batch: 0.1391 seconds
 
     # Heart Rate shape: torch.Size([120])
     # Motion shape: torch.Size([3000, 3])

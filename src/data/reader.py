@@ -86,15 +86,26 @@ class DataReader:
 
 
 if __name__ == "__main__":
-    # Example usage
-    data_reader = DataReader("./data/formated/")
-    subject_id = "1066528"  # Example subject ID
+    import argparse
+    # Set up argument parser
+    parser = argparse.ArgumentParser(
+        description='Read and display data samples')
+    parser.add_argument('--data_dir', type=str, default='./data/formatted/',
+                        help='Directory containing data files')
+    parser.add_argument('--subject_id', type=str, default='1066528',
+                        help='Subject ID to read data for')
+    parser.add_argument('--n_samples', type=int, default=50,
+                        help='Number of samples to display')
+    args = parser.parse_args()
+
+    # Initialize reader and read data
+    data_reader = DataReader(args.data_dir)
 
     # Read different types of data
-    heart_rate_data = data_reader.read_heart_rate(subject_id)
-    motion_data = data_reader.read_motion(subject_id)
-    steps_data = data_reader.read_steps(subject_id)
-    labels = data_reader.read_labels(subject_id)
+    heart_rate_data = data_reader.read_heart_rate(args.subject_id)
+    motion_data = data_reader.read_motion(args.subject_id)
+    steps_data = data_reader.read_steps(args.subject_id)
+    labels = data_reader.read_labels(args.subject_id)
 
     # Print some basic info
     print(f"Heart rate data shape: {heart_rate_data.values.shape}")
@@ -102,29 +113,28 @@ if __name__ == "__main__":
     print(f"Steps data shape: {steps_data.values.shape}")
     print(f"Labels shape: {labels.values.shape}")
 
-    n_samples = 50
-
     # Print first n_samples from each data stream
-    print(f"\nFirst {
-          min(n_samples, len(heart_rate_data.timestamps))} heart rate samples:")
-    for i in range(min(n_samples, len(heart_rate_data.timestamps))):
+    print(f"\nFirst {min(args.n_samples, len(
+        heart_rate_data.timestamps))} heart rate samples:")
+    for i in range(min(args.n_samples, len(heart_rate_data.timestamps))):
         t, v = heart_rate_data.timestamps[i], heart_rate_data.values[i]
         print(f"Time: {t:.2f}s, Heart rate: {v}")
 
-    print(
-        f"\nFirst {min(n_samples, len(motion_data.timestamps))} motion samples:")
-    for i in range(min(n_samples, len(motion_data.timestamps))):
+    print(f"\nFirst {min(args.n_samples, len(
+        motion_data.timestamps))} motion samples:")
+    for i in range(min(args.n_samples, len(motion_data.timestamps))):
         t, v = motion_data.timestamps[i], motion_data.values[i]
         print(f"Time: {t:.2f}s, Acceleration (x,y,z): {v}")
 
-    print(
-        f"\nFirst {min(n_samples, len(steps_data.timestamps))} steps samples:")
-    for i in range(min(n_samples, len(steps_data.timestamps))):
+    print(f"\nFirst {min(args.n_samples, len(
+        steps_data.timestamps))} steps samples:")
+    for i in range(min(args.n_samples, len(steps_data.timestamps))):
         t, v = steps_data.timestamps[i], steps_data.values[i]
         print(f"Time: {t:.2f}s, Steps: {v}")
 
-    print(f"\nFirst {min(n_samples, len(labels.timestamps))} label samples:")
-    for i in range(min(n_samples, len(labels.timestamps))):
+    print(f"\nFirst {min(args.n_samples, len(
+        labels.timestamps))} label samples:")
+    for i in range(min(args.n_samples, len(labels.timestamps))):
         t, v = labels.timestamps[i], labels.values[i]
         print(f"Time: {t:.2f}s, Sleep stage: {v}")
 

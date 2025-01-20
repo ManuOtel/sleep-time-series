@@ -1,18 +1,22 @@
 """
 This module checks data files for completeness and validity.
 
-The main purpose is to verify that all required data streams are present and contain valid data.
-It checks for:
-- Missing data files
-- Empty or corrupted data streams
-- Invalid values or timestamps
-- Inconsistent data lengths
+The main purpose is to verify that all required data streams (heart rate, motion, steps, sleep labels) 
+are present and contain valid data. It performs comprehensive validation including:
 
 The module contains a DataChecker class that:
-    1. Takes HDF5 data files as input
-    2. Checks each data stream for completeness and validity 
-    3. Reports any issues found
-    4. Can process individual subjects or entire dataset
+    1. Takes preprocessed HDF5 data files as input
+    2. Performs configurable validation checks on each data stream, including:
+        - Missing or corrupted data files
+        - Empty data streams or invalid values 
+        - Non-monotonic timestamps and sampling irregularities
+        - Data gaps and coverage issues
+        - Value range violations
+        - Misaligned endpoints between streams
+        - Inconsistent sampling rates
+    3. Reports detailed validation failures and statistics
+    4. Can process individual subjects or entire datasets
+    5. Optionally renames invalid files and updates subject lists
 """
 
 import json
@@ -30,7 +34,18 @@ logger = logging.getLogger(__name__)
 
 
 class DataChecker:
-    """Checks data files for completeness and validity"""
+    """Checks data files for completeness and validity.
+
+    This class provides functionality to validate preprocessed data files by checking:
+    - Data stream presence and completeness 
+    - Value ranges and validity
+    - Timestamp monotonicity and sampling rates
+    - Data gaps and coverage
+    - Stream alignment and synchronization
+
+    The checker can process individual subjects or entire datasets, providing detailed
+    validation reports and optionally handling invalid files.
+    """
 
     def __init__(self, data_dir: str):
         self.data_reader = DataReader(data_dir)
@@ -43,7 +58,26 @@ class DataChecker:
                              steps_data: TimeSeriesData,
                              labels_data: TimeSeriesData,
                              subject_id: str) -> tuple[bool, str]:
-        """Check for empty data streams"""
+        """Check if any data streams are empty.
+
+        Verifies that each data stream (heart rate, motion, steps, labels) contains data points.
+        An empty stream indicates missing or corrupted data that needs to be addressed.
+
+        Args:
+            hr_data: Heart rate time series data
+            motion_data: Motion/acceleration time series data  
+            steps_data: Step count time series data
+            labels_data: Sleep stage label time series data
+            subject_id: Unique identifier for the subject being checked
+
+        Returns:
+            Tuple containing:
+                - bool: True if all streams contain data, False if any are empty
+                - str: Error message describing which stream is empty, or empty string if all valid
+
+        Raises:
+            TypeError: If any input data is not a TimeSeriesData object
+        """
         if len(hr_data.timestamps) == 0:
             logger.warning(f"Subject {subject_id}: Empty heart rate data")
             return False, "Empty heart rate data"
@@ -64,9 +98,30 @@ class DataChecker:
                                  steps_data: TimeSeriesData,
                                  labels_data: TimeSeriesData,
                                  subject_id: str) -> tuple[bool, str]:
-        """Check if all data streams have aligned start and end times, accounting for sampling frequency"""
+        """Check if all data streams have aligned start and end times within expected sampling intervals.
+
+        Verifies that the start and end timestamps of each data stream (heart rate, motion, steps, labels)
+        are properly aligned, accounting for their different sampling frequencies. A small tolerance factor
+        of 2.01x the sampling interval is used to account for minor timing variations.
+
+        Args:
+            hr_data: Heart rate time series data
+            motion_data: Motion/acceleration time series data
+            steps_data: Step count time series data
+            labels_data: Sleep stage label time series data
+            subject_id: Unique identifier for the subject being checked
+
+        Returns:
+            Tuple containing:
+                - bool: True if all streams are properly aligned, False if misaligned
+                - str: Error message describing alignment issue, or empty string if aligned
+
+        Raises:
+            TypeError: If any input data is not a TimeSeriesData object
+            IndexError: If any data stream is empty
+        """
         # Calculate typical intervals between samples for each stream
-        # Static intervals based on preprocessed data analysis
+        # Static intervals based on preprocessed data analysis with 2.01x tolerance
         hr_interval = 2.01 * 5.0  # 5 seconds between heart rate samples
         motion_interval = 2.01 * 0.2  # 0.2 seconds between motion samples
         steps_interval = 2.01 * 500.0  # 500 seconds between step count windows
@@ -116,7 +171,32 @@ class DataChecker:
                             subject_id: str,
                             hr_range: tuple[int, int],
                             motion_range: tuple[float, float]) -> tuple[bool, str]:
-        """Check for invalid values in data streams"""
+        """Check for invalid values in data streams.
+
+        Validates that values in each data stream fall within expected ranges:
+        - Heart rate: Between hr_range[0] and hr_range[1] bpm
+        - Motion: Between motion_range[0] and motion_range[1] g
+        - Steps: Non-negative integers
+        - Labels: Between -1 and 5 (inclusive)
+
+        Args:
+            hr_data: TimeSeriesData containing heart rate measurements
+            motion_data: TimeSeriesData containing motion/acceleration data
+            steps_data: TimeSeriesData containing step counts
+            labels_data: TimeSeriesData containing sleep stage labels
+            subject_id: Identifier for the subject being checked
+            hr_range: Tuple of (min, max) valid heart rate values in bpm
+            motion_range: Tuple of (min, max) valid motion values in g
+
+        Returns:
+            Tuple containing:
+            - bool: True if all values are within valid ranges, False otherwise
+            - str: Error message if invalid values found, empty string if valid
+
+        Raises:
+            TypeError: If input data types are incorrect
+            ValueError: If range parameters are invalid
+        """
         if np.any((hr_data.values < hr_range[0]) | (hr_data.values > hr_range[1])):
             logger.warning(f"Subject {subject_id}: Heart rate values outside normal range ({
                            hr_range[0]}-{hr_range[1]} bpm)")
@@ -144,7 +224,23 @@ class DataChecker:
                           steps_data: TimeSeriesData,
                           labels_data: TimeSeriesData,
                           subject_id: str) -> tuple[bool, str]:
-        """Check timestamp ordering"""
+        """Check that timestamps are monotonically increasing for all data streams.
+
+        Validates that timestamps in each data stream are properly ordered (each timestamp
+        is greater than the previous one).
+
+        Args:
+            hr_data: TimeSeriesData containing heart rate measurements
+            motion_data: TimeSeriesData containing motion/acceleration data  
+            steps_data: TimeSeriesData containing step counts
+            labels_data: TimeSeriesData containing sleep stage labels
+            subject_id: Identifier for the subject being checked
+
+        Returns:
+            Tuple containing:
+            - bool: True if all timestamps are monotonic, False otherwise
+            - str: Error message if non-monotonic timestamps found, empty string if valid
+        """
         for data, name in [(hr_data, "heart rate"), (motion_data, "motion"),
                            (steps_data, "steps"), (labels_data, "labels")]:
             if not np.all(np.diff(data.timestamps) >= 0):
@@ -161,7 +257,25 @@ class DataChecker:
                          subject_id: str,
                          max_allowed_gap: float,
                          max_missing_ratio: float) -> tuple[bool, str]:
-        """Check for large gaps and missing data ratio"""
+        """Check for large gaps and missing data ratio in time series data.
+
+        Validates that there are no large gaps between timestamps and that the total
+        missing data ratio is within acceptable limits for each data stream.
+
+        Args:
+            hr_data: TimeSeriesData containing heart rate measurements
+            motion_data: TimeSeriesData containing motion/acceleration data
+            steps_data: TimeSeriesData containing step counts
+            labels_data: TimeSeriesData containing sleep stage labels
+            subject_id: Identifier for the subject being checked
+            max_allowed_gap: Maximum allowed gap (in seconds) between consecutive timestamps
+            max_missing_ratio: Maximum allowed ratio of missing data duration to total duration
+
+        Returns:
+            Tuple containing:
+            - bool: True if gaps and missing data are within limits, False otherwise
+            - str: Error message if validation fails, empty string if valid
+        """
         for data, name in [(hr_data, "heart rate"), (motion_data, "motion"),
                            (steps_data, "steps"), (labels_data, "labels")]:
             if len(data.timestamps) <= 1:
@@ -193,7 +307,25 @@ class DataChecker:
                               subject_id: str,
                               expected_rates: dict[str, float],
                               rate_tolerances: dict[str, float]) -> tuple[bool, str]:
-        """Check data sampling rates"""
+        """Check that data sampling rates match expected frequencies.
+
+        Validates that the average sampling rate for each data stream is within the
+        specified tolerance of its expected rate.
+
+        Args:
+            hr_data: TimeSeriesData containing heart rate measurements
+            motion_data: TimeSeriesData containing motion/acceleration data
+            steps_data: TimeSeriesData containing step counts
+            labels_data: TimeSeriesData containing sleep stage labels
+            subject_id: Identifier for the subject being checked
+            expected_rates: Dictionary mapping data stream names to their expected sampling rates in Hz
+            rate_tolerances: Dictionary mapping data stream names to their allowed rate deviation ratios
+
+        Returns:
+            Tuple containing:
+            - bool: True if all sampling rates are within tolerances, False otherwise
+            - str: Error message if validation fails, empty string if valid
+        """
         for data, name in [(hr_data, "heart rate"), (motion_data, "motion"),
                            (steps_data, "steps"), (labels_data, "labels")]:
             if len(data.timestamps) > 1:
@@ -216,7 +348,23 @@ class DataChecker:
                         labels_data: TimeSeriesData,
                         subject_id: str,
                         min_duration: float) -> tuple[bool, str]:
-        """Check data alignment and coverage"""
+        """Check data alignment and coverage across different data streams.
+
+        Validates that the data streams have sufficient temporal overlap and meet minimum
+        duration requirements.
+
+        Args:
+            hr_data: TimeSeriesData containing heart rate measurements
+            motion_data: TimeSeriesData containing motion/acceleration data  
+            labels_data: TimeSeriesData containing sleep stage labels
+            subject_id: Identifier for the subject being checked
+            min_duration: Minimum required duration of recording in seconds
+
+        Returns:
+            Tuple containing:
+            - bool: True if coverage requirements are met, False otherwise
+            - str: Error message if validation fails, empty string if valid
+        """
         min_times = [data.timestamps[0]
                      for data in [hr_data, motion_data, labels_data]]
         max_times = [data.timestamps[-1]
@@ -246,7 +394,23 @@ class DataChecker:
                                  labels_data: TimeSeriesData,
                                  subject_id: str,
                                  ) -> tuple[bool, str]:
-        """Check that all data streams start and end at approximately the same time"""
+        """Check that all data streams start and end at approximately the same time.
+
+        Validates temporal alignment between heart rate, motion and label data streams by comparing
+        their start and end timestamps. Streams should start and end within a tolerance based on
+        their sampling rates.
+
+        Args:
+            hr_data: TimeSeriesData containing heart rate measurements
+            motion_data: TimeSeriesData containing motion/acceleration data
+            labels_data: TimeSeriesData containing sleep stage labels
+            subject_id: Identifier for the subject being checked
+
+        Returns:
+            Tuple containing:
+            - bool: True if streams are aligned within tolerance, False otherwise
+            - str: Error message if validation fails, empty string if valid
+        """
         # Tolerance for start/end time misalignment based on sampling rates
         # Use 2x the longest sampling interval as tolerance
         tolerances = {
@@ -293,7 +457,33 @@ class DataChecker:
                            labels_rate: float = 0.033,  # 0.033Hz, 30s
                            min_duration: int = 3 * 3600,  # 3 hours
                            max_missing_ratio: float = 0.3) -> tuple[bool, str]:
-        """Check all data streams for a single subject"""
+        """Check all data streams for a single subject for quality and validity.
+
+        Performs multiple validation checks on the subject's data streams including:
+        - Empty stream detection
+        - Value range validation 
+        - Timestamp monotonicity and gaps
+        - Sampling rate consistency
+        - Data coverage and alignment
+        - Stream endpoint alignment
+
+        Args:
+            subject_id: Unique identifier for the subject
+            hr_range: Valid range for heart rate values (min, max)
+            motion_range: Valid range for motion values (min, max)
+            max_allowed_gap: Maximum allowed gap between samples in seconds
+            heart_rate_rate: Expected heart rate sampling frequency in Hz
+            motion_rate: Expected motion sampling frequency in Hz  
+            steps_rate: Expected steps sampling frequency in Hz
+            labels_rate: Expected labels sampling frequency in Hz
+            min_duration: Minimum required duration of data in seconds
+            max_missing_ratio: Maximum allowed ratio of missing data points
+
+        Returns:
+            Tuple containing:
+            - bool: True if all checks pass, False otherwise
+            - str: Empty string if valid, error message if invalid
+        """
         logger.info(f"Checking data for subject {subject_id}")
 
         try:
@@ -340,16 +530,25 @@ class DataChecker:
                          subject_id}: {str(e)}")
             return False, f"Error checking data: {str(e)}"
 
-    def check_all_subjects(self, verbose: bool = True, modify_invalid: bool = False) -> dict:
+    def check_all_subjects(self, verbose: bool = True, modify_invalid: bool = False) -> dict[str, bool]:
         """
-        Check data for all subjects in the input directory
+        Check data for all subjects in the input directory and return validation results.
+
+        This function reads the subject IDs from subject_ids.json, validates each subject's data,
+        and optionally renames invalid files and updates the subject list.
 
         Args:
-            verbose: If True, print summary of failures. If False, just return results.
-            modify_invalid: If True, rename invalid subject files and remove from subject_ids.json
+            verbose (bool): If True, print detailed summary of validation failures. 
+                          If False, just return results silently. Defaults to True.
+            modify_invalid (bool): If True, rename invalid subject files by prepending "INVALID_" 
+                                 and remove them from subject_ids.json. Defaults to False.
 
         Returns:
-            Dictionary mapping subject IDs to validation results (bool)
+            dict[str, bool]: Dictionary mapping subject IDs (str) to their validation results (bool).
+                            True indicates valid data, False indicates validation failure.
+
+        Raises:
+            FileNotFoundError: If subject_ids.json is not found in the data directory.
         """
         # Read subject IDs from JSON file
         subject_ids_file = self.data_dir / "subject_ids.json"

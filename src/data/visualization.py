@@ -1,7 +1,29 @@
-import matplotlib.pyplot as plt
-from reader import DataReader
-from tqdm import tqdm
+"""
+This module provides visualization functionality for the preprocessed physiological data.
+
+The main purpose is to create comprehensive multi-panel visualizations showing the 
+different data streams (heart rate, motion, steps, sleep stages) aligned in time. 
+This module provides:
+
+- Functions to plot multiple time series data streams
+- Consistent styling and formatting across plots
+- Clear visualization of circadian patterns via day boundaries
+- Metadata annotations about recording duration and quality
+
+The visualizations help with:
+    1. Data quality assessment and validation
+    2. Understanding temporal patterns and relationships
+    3. Identifying potential issues or anomalies
+    4. Communicating findings. 
+
+The plot_subject_data() function is the main entry point used to generate plots
+for individual subjects or batches of subjects.
+"""
+
 import numpy as np
+from tqdm import tqdm
+from reader import DataReader
+import matplotlib.pyplot as plt
 
 
 def plot_subject_data(subject_id: str, data_reader: DataReader, save_path: str, verbose: bool = True):
@@ -66,11 +88,15 @@ def plot_subject_data(subject_id: str, data_reader: DataReader, save_path: str, 
         )
 
     # Plot heart rate with reduced points
+    hr_min = min(hr_data.values)
+    hr_max = max(hr_data.values)
+    hr_buffer = (hr_max - hr_min) * 0.1  # Add 10% padding
+
     axs[0].plot(hr_data.timestamps[::2], hr_data.values[::2],
                 'b.', alpha=0.3, markersize=2, label='Heart Rate')
     axs[0].set_ylabel('Heart Rate\n(bpm)', fontsize=10)
     axs[0].grid(True, alpha=0.3)
-    axs[0].set_ylim(40, 120)
+    axs[0].set_ylim(hr_min - hr_buffer, hr_max + hr_buffer)
 
     # Plot motion with reduced points
     step = max(1, len(motion_data.timestamps) // 10000)  # Limit to ~10k points
@@ -91,8 +117,13 @@ def plot_subject_data(subject_id: str, data_reader: DataReader, save_path: str, 
     axs[3].plot(labels_data.timestamps, labels_data.values,
                 'k.', alpha=0.5, markersize=2)
     axs[3].set_ylabel('Sleep Stage', fontsize=10)
-    axs[3].set_yticks([-1, 0, 1, 2, 3, 5])
-    axs[3].set_yticklabels(['Invalid', 'Wake', 'N1', 'N2', 'N3', 'REM'])
+    # Support both raw and processed label formats
+    if -1 in labels_data.values:  # Raw data format
+        axs[3].set_yticks([-1, 0, 1, 2, 3, 5])
+        axs[3].set_yticklabels(['Invalid', 'Wake', 'N1', 'N2', 'N3', 'REM'])
+    else:  # Processed data format
+        axs[3].set_yticks([0, 1, 2, 3, 4])
+        axs[3].set_yticklabels(['Wake', 'N1', 'N2', 'N3', 'REM'])
     axs[3].grid(True, alpha=0.3)
 
     # Add day boundary lines to all plots
@@ -151,7 +182,14 @@ if __name__ == "__main__":
 
     # Generate plots for selected subjects with progress bar
     for subject_id in tqdm(selected_subjects, desc="Generating plots"):
-        plot_subject_data(subject_id,
-                          data_reader,
-                          args.output_dir,
-                          verbose=args.verbose)
+        try:
+            plot_subject_data(subject_id,
+                              data_reader,
+                              args.output_dir,
+                              verbose=args.verbose)
+        except FileNotFoundError as e:
+            print(f"Invalid subject at {subject_id}")
+            continue
+        except Exception as e:
+            print(f"Error processing subject {subject_id}: {str(e)}")
+            continue

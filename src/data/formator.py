@@ -1,21 +1,25 @@
 """
-This module handles the reformatting of raw apple watch data into a standardized HDF5 format.
+This module handles the reformatting of raw Apple Watch data into a standardized HDF5 format.
 
 The main purpose is to convert raw text files containing heart rate, motion, steps and sleep stage label data 
 into a more efficient HDF5 file format. The HDF5 format provides:
 
-- Faster data access and loading compared to text files 
-- Hierarchical organization of different data streams
-- Efficient storage of large numerical arrays
-- Built-in compression
-
 The module contains a DataFormator class that:
     1. Takes raw txt files from different sensors as input
-    2. Converts the data to HDF5 format
-    3. Saves it in a structured format with timestamps and values for each data stream
-    4. Organizes data by subject ID
+    2. Performs configurable validation checks on each data stream, including:
+        - Missing or corrupted data files
+        - Empty data streams or invalid values
+        - Non-monotonic timestamps and sampling irregularities
+        - Data gaps and coverage issues
+        - Value range violations
+        - Misaligned endpoints between streams
+        - Inconsistent sampling rates
+    3. Converts the data to HDF5 format with appropriate compression
+    4. Reports detailed validation failures and statistics
+    5. Can process individual subjects or entire datasets
+    6. Optionally renames invalid files and updates subject lists
 
-The formatted HDF5 files are then used by the DataReader class for efficient data loading.
+The formatted HDF5 files are then used by the DataReader class for efficient data loading and preprocessing.
 """
 
 import h5py
@@ -34,15 +38,39 @@ logger = logging.getLogger(__name__)
 class DataFormator:
     """Converts raw txt files to HDF5 format for more efficient storage and access"""
 
-    def __init__(self, data_dir: str, output_dir: str):
+    def __init__(self, data_dir: str, output_dir: str) -> None:
+        """Initialize the DataFormator.
+
+        Args:
+            data_dir: Path to directory containing raw txt data files
+            output_dir: Path to directory where HDF5 files will be saved
+
+        Returns:
+            None
+
+        Raises:
+            FileNotFoundError: If data directory does not exist
+            PermissionError: If output directory cannot be created
+        """
         self.data_dir = Path(data_dir)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Initialized DataPreprocessor with data_dir={
                     data_dir} and output_dir={output_dir}")
 
-    def convert_subject_data(self, subject_id: str):
-        """Convert all data files for a single subject to HDF5 format"""
+    def convert_subject_data(self, subject_id: str) -> None:
+        """Convert all data files for a single subject to HDF5 format.
+
+        Args:
+            subject_id: Unique identifier for the subject whose data will be converted
+
+        Returns:
+            None
+
+        Raises:
+            FileNotFoundError: If any of the required data files are missing
+            Exception: If there are errors processing any of the data files
+        """
         logger.info(f"Starting data conversion for subject {subject_id}")
 
         output_file = self.output_dir / f"{subject_id}.h5"
@@ -126,8 +154,25 @@ class DataFormator:
 
         logger.info(f"Completed data conversion for subject {subject_id}")
 
-    def convert_all_subjects(self):
-        """Convert data for all subjects found in the data directory"""
+    def convert_all_subjects(self) -> None:
+        """Convert data for all subjects found in the data directory.
+
+        This method:
+        1. Scans the heart rate directory to identify all subject IDs
+        2. Iterates through each subject and converts their data to HDF5 format
+        3. Processes heart rate, motion, steps and sleep stage label data
+        4. Logs progress and any errors encountered
+
+        The converted HDF5 files will be saved in the output directory specified 
+        during DataFormator initialization.
+
+        Returns:
+            None
+
+        Raises:
+            FileNotFoundError: If heart rate directory is missing
+            OSError: If there are issues accessing the data files
+        """
         logger.info("Starting conversion for all subjects")
 
         # Get unique subject IDs from heart rate directory
@@ -146,12 +191,26 @@ class DataFormator:
 
 
 if __name__ == "__main__":
-    preprocessor = DataFormator("./data/original", "./data/formated")
+    import argparse
+
+    # Set up argument parser
+    parser = argparse.ArgumentParser(
+        description='Convert raw data files to HDF5 format')
+    parser.add_argument('--data_dir', type=str, default='./data/original',
+                        help='Directory containing original data files')
+    parser.add_argument('--output_dir', type=str, default='./data/formated',
+                        help='Directory to save processed HDF5 files')
+    parser.add_argument('--example_id', type=str, default='46343',
+                        help='Subject ID to show as example')
+    args = parser.parse_args()
+
+    # Convert data
+    preprocessor = DataFormator(args.data_dir, args.output_dir)
     preprocessor.convert_all_subjects()
 
     print("\nExample processed data structure:")
     print("-" * 50)
-    with h5py.File('./processed_data/46343.h5', 'r') as f:
+    with h5py.File(f'{args.output_dir}/{args.example_id}.h5', 'r') as f:
         print("\nDataset structure:")
 
         def print_structure(name, obj):

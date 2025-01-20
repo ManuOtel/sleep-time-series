@@ -1,3 +1,29 @@
+"""
+This module provides functionality for training and evaluating sleep stage classification models.
+
+The main purpose is to handle the complete training pipeline including:
+- Data loading and batching
+- Model training and validation
+- Metric tracking and logging
+- Experiment management
+- Parallel training runs
+
+Key components:
+    1. train_model(): Core training loop with metric tracking
+    2. run_single_experiment(): Executes one training run with given parameters
+    3. run_experiment(): Manages parallel execution of multiple training runs
+    4. Logging utilities for thread-safe progress tracking
+    5. TensorBoard integration for visualization
+
+The training pipeline supports:
+    - Multi-fold cross validation
+    - Hyperparameter grid search
+    - GPU acceleration when available
+    - Parallel training runs
+    - Progress logging and visualization
+    - Model checkpointing and history saving
+"""
+
 import gc
 import json
 import torch
@@ -40,34 +66,47 @@ def safe_log(message: str) -> None:
         logger.info(message)
 
 
-def train_model(
-    model: nn.Module,
-    train_loader: DataLoader,
-    valid_loader: DataLoader,
-    test_loader: DataLoader,
-    num_epochs: int = 50,
-    learning_rate: float = 0.001,
-    device: str = "cuda" if torch.cuda.is_available() else "cpu",
-    writer: SummaryWriter = None,
-    run_name: str = "",
-    verbose: bool = False
-) -> dict:
+def train_model(model: nn.Module,
+                train_loader: DataLoader,
+                valid_loader: DataLoader,
+                test_loader: DataLoader,
+                num_epochs: int = 50,
+                learning_rate: float = 0.001,
+                device: str = "cuda" if torch.cuda.is_available() else "cpu",
+                writer: SummaryWriter | None = None,
+                run_name: str = "",
+                verbose: bool = False
+                ) -> dict[str, list[float]]:
     """
-    Train the sleep classification model
+    Train a sleep classification model using provided data loaders.
+
+    Performs training loop with validation and testing. Tracks metrics like loss and accuracy.
+    Optionally logs to TensorBoard and prints verbose progress.
 
     Args:
-        model: The neural network model
-        train_loader: DataLoader for training data
-        valid_loader: DataLoader for validation data
-        num_epochs: Number of training epochs
-        learning_rate: Learning rate for optimizer
-        device: Device to train on ('cuda' or 'cpu')
-        writer: TensorBoard writer
-        run_name: Name of the current run for logging
-        verbose: Whether to print detailed progress
+        model: Neural network model to train
+        train_loader: DataLoader containing training data batches
+        valid_loader: DataLoader containing validation data batches  
+        test_loader: DataLoader containing test data batches
+        num_epochs: Number of complete passes through training data
+        learning_rate: Step size for optimizer updates
+        device: Device to run training on ('cuda' or 'cpu')
+        writer: TensorBoard SummaryWriter for logging metrics
+        run_name: Identifier string for this training run
+        verbose: If True, print detailed progress messages
 
     Returns:
-        dict containing training history
+        Dictionary containing training history with keys:
+            - train_loss: List of training losses per epoch
+            - train_acc: List of training accuracies per epoch  
+            - valid_loss: List of validation losses per epoch
+            - valid_acc: List of validation accuracies per epoch
+            - test_loss: List of test losses per epoch
+            - test_acc: List of test accuracies per epoch
+
+    Raises:
+        RuntimeError: If training fails due to GPU memory or other runtime issues
+        ValueError: If input data dimensions don't match model expectations
     """
     try:
         if verbose:
@@ -82,7 +121,9 @@ def train_model(
             'train_loss': [],
             'train_acc': [],
             'valid_loss': [],
-            'valid_acc': []
+            'valid_acc': [],
+            'test_loss': [],
+            'test_acc': []
         }
 
         # Training loop
@@ -275,8 +316,41 @@ def train_model(
     return history
 
 
-def run_single_experiment(params, base_dir, num_workers, data_dir, num_classes, verbose=True):
-    """Run a single experiment with given parameters"""
+def run_single_experiment(params: dict[str, float | int],
+                          base_dir: Path,
+                          num_workers: int,
+                          data_dir: str | Path,
+                          num_classes: int,
+                          verbose: bool = True
+                          ) -> dict[str, list[float]]:
+    """Run a single training experiment with the given hyperparameters and configuration.
+
+    Args:
+        params: Dictionary containing training hyperparameters:
+            - num_epochs: Number of training epochs
+            - learning_rate: Learning rate for optimizer
+            - batch_size: Batch size for training
+            - fold_id: Cross validation fold ID
+        base_dir: Base directory path to save experiment outputs
+        num_workers: Number of worker processes for data loading
+        data_dir: Directory containing the dataset files
+        num_classes: Number of classes for classification
+        verbose: If True, print detailed progress messages
+
+    Returns:
+        Dictionary containing training history with metrics per epoch:
+            - train_loss: Training losses
+            - train_acc: Training accuracies
+            - valid_loss: Validation losses
+            - valid_acc: Validation accuracies
+            - test_loss: Test losses
+            - test_acc: Test accuracies
+
+    Raises:
+        RuntimeError: If experiment fails due to memory or other runtime issues
+        FileNotFoundError: If data directory does not exist
+        ValueError: If invalid parameter values are provided
+    """
     try:
         # Create run directory
         run_name = f"m_e{params['num_epochs']}_lr{params['learning_rate']}_b{
@@ -339,10 +413,10 @@ def run_single_experiment(params, base_dir, num_workers, data_dir, num_classes, 
             safe_log(f"[{run_name}] Training on device: {device}")
         model = model.to(device)
 
-        # Compile model
+        # Compile model I WOULD LOVE TO USE THIS BUT SOO MANY ISSUES....
         if verbose:
             safe_log(f"[{run_name}] Compiling model...")
-        model = torch.compile(model)  # , mode='max-autotune')
+        model = torch.compile(model, backend='eager')  # , mode='max-autotune')
         # Train model
         if verbose:
             safe_log(f"\n[{run_name}] Starting run\n[{run_name}] Parameters: {
@@ -384,27 +458,38 @@ def run_single_experiment(params, base_dir, num_workers, data_dir, num_classes, 
         raise
 
 
-def run_experiment(
-    num_workers: int = 4,
-    data_dir: str = "data/preprocessed",
-    num_classes: int = 5,
-    param_grid: dict = {
-        # Train for longer to ensure convergence
-        'num_epochs': [10],  # , 25, 100, 10],  # Start with moderate epochs
-        'learning_rate': [0.0003, 0.001, 0.0001],  # Start with middle LR
-        'batch_size': [512, 256, 128],  # Start with moderate batch size
-        'fold_id': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # 10-fold cross-validation
-    },
-        max_parallel: int = 1):
-    """
-    Run experiments with different parameter combinations in parallel
+def run_experiment(num_workers: int = 5,
+                   data_dir: str = "data/preprocessed",
+                   num_classes: int = 5,
+                   param_grid: dict[str, list[int | float]] = {'num_epochs': [10, 25, 50, 100],
+                                                               'learning_rate': [0.0001, 0.0003, 0.001, 0.003],
+                                                               'batch_size': [64, 128, 256, 512],
+                                                               'fold_id': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]},
+                   max_parallel: int = 1) -> None:
+    """Run experiments with different parameter combinations in parallel.
+
+    This function executes a grid search over the provided parameter combinations,
+    training multiple models in parallel. For each parameter combination, it:
+    1. Creates a unique model directory
+    2. Initializes data loaders and model
+    3. Trains the model and tracks metrics
+    4. Saves the model weights and training history
 
     Args:
-        num_workers: Number of data loading workers
-        data_dir: Directory containing preprocessed data
-        num_classes: Number of sleep stage classes
-        param_grid: Dictionary containing parameter combinations to try
-        max_parallel: Maximum number of parallel training runs
+        num_workers: Number of worker processes for data loading. Defaults to 5.
+        data_dir: Path to directory containing preprocessed HDF5 data files. 
+            Defaults to "data/preprocessed".
+        num_classes: Number of sleep stage classes to predict. Defaults to 5.
+        param_grid: Dictionary mapping parameter names to lists of values to try.
+            Must contain 'num_epochs', 'learning_rate', 'batch_size', and 'fold_id'.
+            Defaults to standard parameter ranges.
+        max_parallel: Maximum number of training runs to execute simultaneously.
+            Defaults to 1 (sequential execution).
+
+    Raises:
+        RuntimeError: If training fails for any parameter combination
+        ValueError: If param_grid is missing required parameters
+        FileNotFoundError: If data_dir does not exist
     """
 
     # Create base model directory
@@ -432,4 +517,28 @@ def run_experiment(
 
 
 if __name__ == "__main__":
-    run_experiment()
+    run_experiment(param_grid={
+        'num_epochs': [10],
+        'learning_rate': [0.0003, 0.001, 0.0001],
+        'batch_size': [512, 265, 128],
+        'fold_id': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    })
+
+    #### Print Example ####
+    # [m_e10_lr0.0003_b512_f0] Batch 28 loss: 0.4473
+    # [m_e10_lr0.0003_b512_f0] Batch 29 loss: 0.3828
+    # [m_e10_lr0.0003_b512_f0] Batch 30 loss: 0.4333
+    # [m_e10_lr0.0003_b512_f0] Batch 31 loss: 0.4504
+    # [m_e10_lr0.0003_b512_f0] Batch 32 loss: 0.4372
+    # [m_e10_lr0.0003_b512_f0] Batch 33 loss: 0.4963
+    # [m_e10_lr0.0003_b512_f0] Batch 34 loss: 0.4618
+    # [m_e10_lr0.0003_b512_f0] Batch 35 loss: 0.3977
+    # [m_e10_lr0.0003_b512_f0] Batch 36 loss: 0.4447
+    # [m_e10_lr0.0003_b512_f0] Batch 37 loss: 0.3901
+    # [m_e10_lr0.0003_b512_f0] Batch 38 loss: 0.3660
+    # 2025-01-20 13:38:22 | [m_e10_lr0.0003_b512_f0] Epoch 4/10 | Train Loss: 0.4631 | Train Acc: 87.45% | Valid Loss: 0.4135 | Valid Acc: 88.86% | Test Loss: 0.4626 | Test Acc: 84.33%
+    # 2025-01-20 13:38:22 | [m_e10_lr0.0003_b512_f0] Starting epoch 5
+    # [m_e10_lr0.0003_b512_f0] Batch 1 loss: 0.5099
+    # [m_e10_lr0.0003_b512_f0] Batch 2 loss: 0.3412
+    # [m_e10_lr0.0003_b512_f0] Batch 3 loss: 0.4415
+    # [m_e10_lr0.0003_b512_f0] Batch 4 loss: 0.3700
