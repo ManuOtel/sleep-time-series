@@ -56,8 +56,11 @@ class SleepClassifierTransformer(nn.Module):
             num_layers=1  # Single layer
         )
 
+        # Previous labels embedding
+        self.label_embedding = nn.Embedding(num_classes, 32)
+
         # Simpler classifier
-        combined_size = 64 + 128 + 1  # HR + Motion + Steps
+        combined_size = 64 + 128 + 1 + 32  # HR + Motion + Steps + Previous Labels
         self.classifier = nn.Sequential(
             nn.Linear(combined_size, 128),
             nn.ReLU(inplace=True),
@@ -82,8 +85,13 @@ class SleepClassifierTransformer(nn.Module):
         # Steps processing
         steps_feat = x['steps']
 
+        # Previous labels processing
+        prev_labels = x['previous_labels'][:, -1]  # Take last label
+        label_feat = self.label_embedding(prev_labels)
+
         # Combine and classify
-        combined = torch.cat([hr_feat, motion_feat, steps_feat], dim=1)
+        combined = torch.cat(
+            [hr_feat, motion_feat, steps_feat, label_feat], dim=1)
         return self.classifier(combined)
 
 
@@ -136,8 +144,12 @@ class SleepClassifierLSTM(nn.Module):
             bidirectional=True
         )
 
+        # Previous labels embedding
+        self.label_embedding = nn.Embedding(num_classes, 32)
+
         # Simpler classifier
-        combined_size = 64 + 128 + 1  # HR (32*2) + Motion (64*2) + Steps
+        # HR (32*2) + Motion (64*2) + Steps + Previous Labels
+        combined_size = 64 + 128 + 1 + 32
         self.classifier = nn.Sequential(
             nn.Linear(combined_size, 128),
             nn.ReLU(inplace=True),
@@ -162,8 +174,13 @@ class SleepClassifierLSTM(nn.Module):
         # Steps processing
         steps_feat = x['steps']
 
+        # Previous labels processing
+        prev_labels = x['previous_labels'][:, -1]  # Take last label
+        label_feat = self.label_embedding(prev_labels)
+
         # Combine and classify
-        combined = torch.cat([hr_feat, motion_feat, steps_feat], dim=1)
+        combined = torch.cat(
+            [hr_feat, motion_feat, steps_feat, label_feat], dim=1)
         return self.classifier(combined)
 
 
@@ -173,7 +190,8 @@ if __name__ == "__main__":
     example_data = {
         'heart_rate': torch.randn(batch_size, 120),      # [B, 120]
         'motion': torch.randn(batch_size, 3000, 3),      # [B, 3000, 3]
-        'steps': torch.randn(batch_size, 1)              # [B, 1]
+        'steps': torch.randn(batch_size, 1),             # [B, 1]
+        'previous_labels': torch.randint(0, 4, (batch_size, 1))  # [B, 19]
     }
 
     # Test LSTM version
@@ -184,6 +202,7 @@ if __name__ == "__main__":
     print(f"Heart rate: {example_data['heart_rate'].shape}")
     print(f"Motion: {example_data['motion'].shape}")
     print(f"Steps: {example_data['steps'].shape}")
+    print(f"Previous labels: {example_data['previous_labels'].shape}")
     print(f"\nOutput shape: {output_lstm.shape}")  # Should be [2, 5]
     print(f"Output example:\n{output_lstm}")
 

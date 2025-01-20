@@ -1,10 +1,10 @@
 import json
 import torch
 import numpy as np
-from typing import List, Tuple, Dict, Optional
-from torch.utils.data import Dataset, DataLoader, random_split
-from .reader import DataReader
 from pathlib import Path
+from .reader import DataReader
+from typing import Tuple, Dict, Optional
+from torch.utils.data import Dataset, random_split
 
 
 class SleepDataset(Dataset):
@@ -117,23 +117,32 @@ class SleepDataset(Dataset):
                 if len(labels_in_window) == 0 or -1 in labels_in_window:
                     continue
 
-                label = np.bincount(labels_in_window).argmax()
+                # For a 600s window with 30s intervals, we expect 20 labels
+                if len(labels_in_window) < 20:  # Skip if we don't have enough labels
+                    continue
 
-                # Convert label to one-hot encoded vector
-                label_onehot = torch.zeros(self.num_classes)
-                label_onehot[label] = 1.0
+                # Previous labels are all except the last one
+                previous_labels = labels_in_window[:-1]  # Should be 19 labels
+                # The 20th label to predict
+                current_label = labels_in_window[-1]
 
                 sequence = {
                     'heart_rate': torch.FloatTensor(hr_seq),      # [120, 1]
                     'motion': torch.FloatTensor(motion_seq),      # [3000, 3]
                     'steps': torch.FloatTensor(steps_seq),        # [1-2, 1]
+                    'previous_labels': torch.LongTensor(previous_labels)
                 }
 
                 self.sequences.append(sequence)
-                self.labels.append(label_onehot)
-
-        # Changed from ByteTensor to stacked tensor
-        self.labels = torch.stack(self.labels)
+                # Only storing the last label as target
+                self.labels.append(current_label)
+        # Convert labels to one-hot encoded tensors
+        labels_one_hot = torch.zeros((len(self.labels), self.num_classes))
+        for i, label in enumerate(self.labels):
+            # Convert label 5 to 4 to make classes sequential 0-4
+            label = 4 if label == 5 else label
+            labels_one_hot[i][label] = 1
+        self.labels = labels_one_hot
 
         # Split into train/valid if in training mode and using folds
         if fold_id is not None and train_mode and valid_ratio > 0:
@@ -197,6 +206,8 @@ if __name__ == "__main__":
     print(f"Motion shape: {sequence['motion'].shape}")  # Should be [3000, 3]
     # Should be [1, 1] or [2, 1]
     print(f"Steps shape: {sequence['steps'].shape}")
+    print(f"Previous labels shape: {
+          sequence['previous_labels'].shape}")
     print(f"Label: {label}")
 
     #### Print Example ####
@@ -207,4 +218,5 @@ if __name__ == "__main__":
     # Heart Rate shape: torch.Size([120])
     # Motion shape: torch.Size([3000, 3])
     # Steps shape: torch.Size([1])
-    # Label: tensor([1., 0., 0., 0., 0.])
+    # Previous labels shape: torch.Size([19])
+    # Label: tensor([0., 0., 1., 0., 0.])

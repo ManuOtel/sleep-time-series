@@ -1,22 +1,18 @@
-from data.dataset import SleepDataset
-from sleep_classifier import SleepClassifierLSTM as SleepClassifier
-import json
 import gc
+import json
 import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
-from pathlib import Path
 import logging
-from torch.utils.tensorboard import SummaryWriter
 import itertools
-import concurrent.futures
 import threading
-import torch._dynamo
-torch._dynamo.config.suppress_errors = True
-
-
-# Configure thread-safe logging
-# ============================
+import torch.nn as nn
+import concurrent.futures
+from pathlib import Path
+from data.dataset import SleepDataset
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+from sleep_classifier import SleepClassifierLSTM as SleepClassifier
+# import torch._dynamo
+# torch._dynamo.config.suppress_errors = True
 
 # Set up logging with timestamp and thread safety
 logging.basicConfig(
@@ -48,6 +44,7 @@ def train_model(
     model: nn.Module,
     train_loader: DataLoader,
     valid_loader: DataLoader,
+    test_loader: DataLoader,
     num_epochs: int = 50,
     learning_rate: float = 0.001,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
@@ -157,6 +154,9 @@ def train_model(
             valid_loss = 0
             valid_correct = 0
             valid_total = 0
+            test_loss = 0
+            test_correct = 0
+            test_total = 0
 
             with torch.no_grad():
                 for batch_idx, (batch_data, batch_labels) in enumerate(valid_loader):
@@ -183,6 +183,31 @@ def train_model(
                                  batch_idx}: {str(e)}')
                         raise
 
+                # Testing
+                for batch_idx, (batch_data, batch_labels) in enumerate(test_loader):
+                    try:
+                        if verbose:
+                            safe_log(f"[{run_name}] Processing test batch {
+                                     batch_idx+1}...")
+
+                        batch_data = {k: v.to(device)
+                                      for k, v in batch_data.items()}
+                        batch_labels = batch_labels.to(device)
+
+                        outputs = model(batch_data)
+                        loss = criterion(outputs, batch_labels)
+
+                        test_loss += loss.item()
+                        _, predicted = outputs.max(1)
+                        _, true_labels = batch_labels.max(1)
+                        test_total += true_labels.size(0)
+                        test_correct += predicted.eq(true_labels).sum().item()
+
+                    except Exception as e:
+                        safe_log(f'[{run_name}] Error in test batch {
+                                 batch_idx}: {str(e)}')
+                        raise
+
             if verbose:
                 safe_log(f"[{run_name}] Computing epoch metrics...")
 
@@ -191,11 +216,15 @@ def train_model(
             train_acc = 100. * train_correct / train_total
             valid_loss = valid_loss / len(valid_loader)
             valid_acc = 100. * valid_correct / valid_total
+            test_loss = test_loss / len(test_loader)
+            test_acc = 100. * test_correct / test_total
 
             history['train_loss'].append(train_loss)
             history['train_acc'].append(train_acc)
             history['valid_loss'].append(valid_loss)
             history['valid_acc'].append(valid_acc)
+            history['test_loss'].append(test_loss)
+            history['test_acc'].append(test_acc)
 
             if verbose:
                 safe_log(f"[{run_name}] Logging to TensorBoard...")
@@ -210,12 +239,13 @@ def train_model(
                     f'{run_name}/Valid/Epoch_Loss', valid_loss, epoch)
                 writer.add_scalar(
                     f'{run_name}/Valid/Epoch_Accuracy', valid_acc, epoch)
+                writer.add_scalar(
+                    f'{run_name}/Test/Epoch_Loss', test_loss, epoch)
+                writer.add_scalar(
+                    f'{run_name}/Test/Epoch_Accuracy', test_acc, epoch)
 
-            safe_log(f'[{run_name}] Epoch {epoch+1}/{num_epochs}:')
-            safe_log(f'[{run_name}] Train Loss: {
-                     train_loss:.4f} | Train Acc: {train_acc:.2f}%')
-            safe_log(f'[{run_name}] Valid Loss: {
-                     valid_loss:.4f} | Valid Acc: {valid_acc:.2f}%')
+            safe_log(f'[{run_name}] Epoch {epoch+1}/{num_epochs} | Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}% | Valid Loss: {
+                     valid_loss:.4f} | Valid Acc: {valid_acc:.2f}% | Test Loss: {test_loss:.4f} | Test Acc: {test_acc:.2f}%')
 
     except Exception as e:
         safe_log(f'[{run_name}] Fatal error during training: {str(e)}')
@@ -266,6 +296,8 @@ def run_single_experiment(params, base_dir, num_workers, data_dir, num_classes, 
             data_dir, fold_id=params['fold_id'], train_mode=True, split='train')
         valid_dataset = SleepDataset(
             data_dir, fold_id=params['fold_id'], train_mode=True, split='valid')
+        test_dataset = SleepDataset(
+            data_dir, fold_id=params['fold_id'], train_mode=False)
 
         # Create dataloaders
         if verbose:
@@ -288,6 +320,15 @@ def run_single_experiment(params, base_dir, num_workers, data_dir, num_classes, 
             prefetch_factor=4,
             persistent_workers=True
         )
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=params['batch_size'],
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=True,
+            prefetch_factor=4,
+            persistent_workers=True
+        )
 
         # Initialize model
         if verbose:
@@ -299,19 +340,19 @@ def run_single_experiment(params, base_dir, num_workers, data_dir, num_classes, 
         model = model.to(device)
 
         # Compile model
-        # if verbose:
-        #     safe_log(f"[{run_name}] Compiling model...")
-        # model = torch.compile(model)
+        if verbose:
+            safe_log(f"[{run_name}] Compiling model...")
+        model = torch.compile(model)  # , mode='max-autotune')
         # Train model
         if verbose:
-            safe_log(f"\n[{run_name}] Starting run")
-            safe_log(f"[{run_name}] Parameters: {params}")
-            safe_log(f"[{run_name}] Training model...")
+            safe_log(f"\n[{run_name}] Starting run\n[{run_name}] Parameters: {
+                     params}\n[{run_name}] Training model...")
 
         history = train_model(
             model=model,
             train_loader=train_loader,
             valid_loader=valid_loader,
+            test_loader=test_loader,
             num_epochs=params['num_epochs'],
             learning_rate=params['learning_rate'],
             writer=writer,
@@ -349,13 +390,12 @@ def run_experiment(
     num_classes: int = 5,
     param_grid: dict = {
         # Train for longer to ensure convergence
-        'num_epochs': [50, 25, 100, 10],  # Start with moderate epochs
+        'num_epochs': [10],  # , 25, 100, 10],  # Start with moderate epochs
         'learning_rate': [0.0003, 0.001, 0.0001],  # Start with middle LR
-        'batch_size': [128, 256, 64],  # Start with moderate batch size
+        'batch_size': [512, 256, 128],  # Start with moderate batch size
         'fold_id': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # 10-fold cross-validation
     },
-    max_parallel: int = 3
-):
+        max_parallel: int = 1):
     """
     Run experiments with different parameter combinations in parallel
 
