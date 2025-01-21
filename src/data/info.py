@@ -34,10 +34,30 @@ logger = logging.getLogger(__name__)
 class DataInfo:
     """Analyzes data files to extract key statistical information"""
 
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str, verbose: bool = False) -> None:
+        """Initialize DataInfo analyzer.
+
+        Args:
+            data_dir: Directory path containing preprocessed HDF5 data files
+            verbose: If True, enable detailed logging output. Defaults to False.
+
+        Returns:
+            None
+
+        Raises:
+            FileNotFoundError: If data_dir does not exist
+            TypeError: If data_dir is not a string or verbose is not a boolean
+        """
+        # Check if directory exists
+        if not Path(data_dir).exists():
+            raise FileNotFoundError(f"Directory not found: {data_dir}")
+
+        self.verbose = verbose
         self.data_reader = DataReader(data_dir)
         self.data_dir = Path(data_dir)
-        logger.info(f"Initialized DataInfo with data_dir={data_dir}")
+
+        if self.verbose:
+            logger.info(f"Initialized DataInfo with data_dir={data_dir}")
 
     def _analyze_time_series_gaps(self, timestamps: np.ndarray) -> dict[str, float | dict[str, float] | None]:
         """Analyze gaps and irregularities in time series data.
@@ -413,85 +433,108 @@ class DataInfo:
 
 if __name__ == "__main__":
     import argparse
-    # Set up argument parser
+
     parser = argparse.ArgumentParser(
         description='Analyze data quality metrics')
-    parser.add_argument('--data_dir', type=str, default='./data/preprocessed/',
+    parser.add_argument('-d', '--data_dir', type=str, default='./data/test/',
                         help='Directory containing preprocessed data')
-    parser.add_argument('--verbose', action='store_true', default=True,
+    parser.add_argument('-v', '--verbose', action='store_true', default=False,
                         help='Print detailed analysis results')
+
     args = parser.parse_args()
 
     # Initialize analyzer and run analysis
-    analyzer = DataInfo(args.data_dir)
+    analyzer = DataInfo(args.data_dir, args.verbose)
     results = analyzer.analyze_all_subjects()
 
-    if args.verbose:
-        print("\nTime Series Analysis Summary")
-        print("=" * 50)
+    print("\nTime Series Analysis Summary")
+    print("=" * 80)
 
-        summary = results['summary']
-        for stream in ['heart_rate', 'motion', 'steps', 'labels']:
-            print(f"\n{stream.upper()} Data Quality:")
-            print(f"Missing Data:")
-            print(f"  - Mean: {summary[stream]
-                  ['missing_data']['mean_pct']:.1f}%")
-            print(f"  - Median: {summary[stream]
-                  ['missing_data']['median_pct']:.1f}%")
-            print(f"Gap Statistics:")
-            print(f"  - Mean gap: {summary[stream]
-                  ['gap_statistics']['mean_gap']:.2f}s")
-            print(f"  - Max gap: {summary[stream]
-                  ['gap_statistics']['max_gap']:.2f}s")
-            if 'sampling_rate' in summary[stream]:
-                print(f"Sampling Rate:")
-                print(f"  - {summary[stream]['sampling_rate']:.2f} Hz")
-            if 'distribution' in summary[stream]:
-                print(f"Distribution:")
-                print(
-                    f"  - Mean skewness: {summary[stream]['distribution']['mean_skewness']:.3f}")
-                print(
-                    f"  - Median skewness: {summary[stream]['distribution']['median_skewness']:.3f}")
+    summary = results['summary']
+    for stream in ['heart_rate', 'motion', 'steps', 'labels']:
+        print(f"\n{stream.upper()} Data Quality")
+        print("-" * 40)
+
+        # Missing Data Section
+        print("Missing Data")
+        print(f"  Mean:   {summary[stream]
+              ['missing_data']['mean_pct']:>8.1f}%")
+        print(f"  Median: {summary[stream]
+              ['missing_data']['median_pct']:>8.1f}%")
+
+        # Gap Statistics Section
+        print("\nGap Statistics")
+        print(f"  Mean Gap: {summary[stream]
+              ['gap_statistics']['mean_gap']:>8.2f}s")
+        print(f"  Max Gap:  {summary[stream]
+              ['gap_statistics']['max_gap']:>8.2f}s")
+
+        # Optional Sampling Rate
+        if 'sampling_rate' in summary[stream]:
+            print("\nSampling Rate")
+            print(f"  Rate: {summary[stream]['sampling_rate']:>8.2f} Hz")
+
+        # Optional Distribution Stats
+        if 'distribution' in summary[stream]:
+            print("\nDistribution")
+            print(f"  Mean Skewness:   {
+                  summary[stream]['distribution']['mean_skewness']:>8.3f}")
+            print(f"  Median Skewness: {
+                  summary[stream]['distribution']['median_skewness']:>8.3f}")
 
     #### Print Example ####
 
     # Time Series Analysis Summary
-    # ==================================================
+    # ================================================================================
 
-    # HEART_RATE Data Quality:
-    # Missing Data:
-    # - Mean: 15.4%
-    # - Median: 3.9%
-    # Gap Statistics:
-    # - Mean gap: 66.84s
-    # - Max gap: 858.50s
-    # Distribution:
-    # - Mean skewness: 1.857
+    # HEART_RATE Data Quality
+    # ----------------------------------------
+    # Missing Data
+    #   Mean:        0.0%
+    #   Median:      0.0%
 
-    # MOTION Data Quality:
-    # Missing Data:
-    # - Mean: 1.0%
-    # - Median: 0.1%
-    # Gap Statistics:
-    # - Mean gap: 131.81s
-    # - Max gap: 1277.24s
-    # Distribution:
-    # - Mean skewness: 24.885
+    # Gap Statistics
+    #   Mean Gap:     5.00s
+    #   Max Gap:      5.00s
 
-    # STEPS Data Quality:
-    # Missing Data:
-    # - Mean: 0.0%
-    # - Median: 0.0%
-    # Gap Statistics:
-    # - Mean gap: 578.07s
-    # - Max gap: 600.00s
-    # Distribution:
-    # - Mean skewness: nan
+    # Distribution
+    #   Mean Skewness:      1.863
+    #   Median Skewness:    1.687
 
-    # LABELS Data Quality:
-    # Missing Data:
-    # - Mean: 0.0%
-    # - Median: 0.0%
-    # Gap Statistics:
-    # - Mean gap: 30.00s
-    # - Max gap: 30.00s
+    # MOTION Data Quality
+    # ----------------------------------------
+    # Missing Data
+    #   Mean:        0.0%
+    #   Median:      0.0%
+
+    # Gap Statistics
+    #   Mean Gap:     0.20s
+    #   Max Gap:      0.20s
+
+    # Distribution
+    #   Mean Skewness:     21.157
+    #   Median Skewness:   16.385
+
+    # STEPS Data Quality
+    # ----------------------------------------
+    # Missing Data
+    #   Mean:        0.0%
+    #   Median:      0.0%
+
+    # Gap Statistics
+    #   Mean Gap:   506.16s
+    #   Max Gap:    542.61s
+
+    # Distribution
+    #   Mean Skewness:        nan
+    #   Median Skewness:      nan
+
+    # LABELS Data Quality
+    # ----------------------------------------
+    # Missing Data
+    #   Mean:        0.0%
+    #   Median:      0.0%
+
+    # Gap Statistics
+    #   Mean Gap:    30.00s
+    #   Max Gap:     30.00s

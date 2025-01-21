@@ -25,6 +25,7 @@ The training pipeline supports:
 """
 
 import gc
+import yaml
 import json
 import torch
 import logging
@@ -53,6 +54,23 @@ logger = logging.getLogger(__name__)
 
 # Create thread lock for safe logging
 log_lock = threading.Lock()
+
+
+def load_config(config_path: str, experiment_name: str | None = None) -> dict:
+    """
+    Load configuration from YAML file.
+
+    Args:
+        config_path: Path to config file
+        experiment_name: Name of specific parameter grid to use (e.g., 'quick_test')
+    """
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+
+    if experiment_name and experiment_name in config:
+        config['param_grid'] = config[experiment_name]
+
+    return config
 
 
 def safe_log(message: str) -> None:
@@ -320,7 +338,6 @@ def run_single_experiment(params: dict[str, float | int],
                           base_dir: Path,
                           num_workers: int,
                           data_dir: str | Path,
-                          num_classes: int,
                           verbose: bool = True
                           ) -> dict[str, list[float]]:
     """Run a single training experiment with the given hyperparameters and configuration.
@@ -334,7 +351,6 @@ def run_single_experiment(params: dict[str, float | int],
         base_dir: Base directory path to save experiment outputs
         num_workers: Number of worker processes for data loading
         data_dir: Directory containing the dataset files
-        num_classes: Number of classes for classification
         verbose: If True, print detailed progress messages
 
     Returns:
@@ -407,7 +423,7 @@ def run_single_experiment(params: dict[str, float | int],
         # Initialize model
         if verbose:
             safe_log(f"[{run_name}] Initializing model...")
-        model = SleepClassifier(num_classes=num_classes)
+        model = SleepClassifier()
         device = "cuda" if torch.cuda.is_available() else "cpu"
         if verbose:
             safe_log(f"[{run_name}] Training on device: {device}")
@@ -460,7 +476,6 @@ def run_single_experiment(params: dict[str, float | int],
 
 def run_experiment(num_workers: int = 5,
                    data_dir: str = "data/preprocessed",
-                   num_classes: int = 5,
                    param_grid: dict[str, list[int | float]] = {'num_epochs': [10, 25, 50, 100],
                                                                'learning_rate': [0.0001, 0.0003, 0.001, 0.003],
                                                                'batch_size': [64, 128, 256, 512],
@@ -479,7 +494,6 @@ def run_experiment(num_workers: int = 5,
         num_workers: Number of worker processes for data loading. Defaults to 5.
         data_dir: Path to directory containing preprocessed HDF5 data files. 
             Defaults to "data/preprocessed".
-        num_classes: Number of sleep stage classes to predict. Defaults to 5.
         param_grid: Dictionary mapping parameter names to lists of values to try.
             Must contain 'num_epochs', 'learning_rate', 'batch_size', and 'fold_id'.
             Defaults to standard parameter ranges.
@@ -500,6 +514,17 @@ def run_experiment(num_workers: int = 5,
     param_combinations = [dict(zip(param_grid.keys(), v))
                           for v in itertools.product(*param_grid.values())]
 
+    # Filter out combinations where model already exists
+    filtered_combinations = []
+    for params in param_combinations:
+        run_name = f"m_e{params['num_epochs']}_lr{params['learning_rate']}_b{
+            params['batch_size']}_f{params['fold_id']}"
+        model_path = base_dir / run_name / 'model.pth'
+        if not model_path.exists():
+            filtered_combinations.append(params)
+        else:
+            safe_log(f"Skipping {run_name} - model already exists")
+
     # Run experiments in parallel
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_parallel) as executor:
         futures = [
@@ -508,21 +533,39 @@ def run_experiment(num_workers: int = 5,
                 params,
                 base_dir,
                 num_workers,
-                data_dir,
-                num_classes
+                data_dir
             )
-            for params in param_combinations
+            for params in filtered_combinations
         ]
         concurrent.futures.wait(futures)
 
 
 if __name__ == "__main__":
-    run_experiment(param_grid={
-        'num_epochs': [10],
-        'learning_rate': [0.0003, 0.001, 0.0001],
-        'batch_size': [512, 265, 128],
-        'fold_id': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-    })
+    import argparse
+    # Set up argument parser
+    parser = argparse.ArgumentParser(
+        description='Train sleep stage classification models')
+    parser.add_argument('-d', '--data_dir', type=str, default='./data/preprocessed/',
+                        help='Directory containing preprocessed data')
+    parser.add_argument('-n', '--num_workers', type=int, default=4,
+                        help='Number of worker processes for data loading')
+    parser.add_argument('-p', '--max_parallel', type=int, default=1,
+                        help='Maximum number of training runs to execute simultaneously')
+    parser.add_argument('-c', '--config', type=str, default='config/training_config.yaml',
+                        help='Path to configuration file')
+    parser.add_argument('-e', '--experiment', type=str,
+                        help='Specific experiment configuration to use (e.g., quick_test)')
+    args = parser.parse_args()
+
+    # Load configuration
+    config = load_config(args.config, args.experiment)
+
+    run_experiment(
+        num_workers=config['training']['num_workers'],
+        data_dir=config['training']['data_dir'],
+        param_grid=config['manu_test'],
+        max_parallel=config['training']['max_parallel']
+    )
 
     #### Print Example ####
     # [m_e10_lr0.0003_b512_f0] Batch 28 loss: 0.4473

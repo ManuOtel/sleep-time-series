@@ -18,9 +18,24 @@ The DataReader class is used by the SleepDataset class to load data during model
 """
 
 import h5py
+import logging
 import numpy as np
 from pathlib import Path
 from dataclasses import dataclass
+
+
+# Configure logger for data reader module
+logger = logging.getLogger("data.reader")  # Use hierarchical logger name
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.handlers = []
+logger.addHandler(logging.NullHandler())
 
 
 @dataclass
@@ -33,12 +48,33 @@ class TimeSeriesData:
 class DataReader:
     """Class for reading different types of time series data from HDF5 files"""
 
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str, verbose: bool = False):
         self.data_dir = Path(data_dir)
+        self.verbose = verbose
+        if verbose:
+            # Only add stream handler if verbose is True
+            logger.handlers = []  # Clear existing handlers
+            logger.addHandler(handler)
+        else:
+            # Ensure only NullHandler is present
+            logger.handlers = []
+            logger.addHandler(logging.NullHandler())
 
     def read_heart_rate(self, subject_id: str) -> TimeSeriesData:
         """Read heart rate data for a given subject"""
         file_path = self.data_dir / f"{subject_id}.h5"
+        if self.verbose:
+            logger.info(f"Reading data for subject {
+                subject_id} from {self.data_dir}")
+        if not file_path.exists():
+            raise FileNotFoundError(f"Data file not found: {file_path}")
+        if not file_path.is_file():
+            raise FileNotFoundError(
+                f"Path exists but is not a file: {file_path}")
+        if not file_path.suffix == '.h5':
+            raise ValueError(
+                f"File must be HDF5 format with .h5 extension: {file_path}")
+
         if not file_path.exists():
             raise FileNotFoundError(f"Data file not found: {file_path}")
 
@@ -90,7 +126,7 @@ if __name__ == "__main__":
     # Set up argument parser
     parser = argparse.ArgumentParser(
         description='Read and display data samples')
-    parser.add_argument('--data_dir', type=str, default='./data/formatted/',
+    parser.add_argument('--data_dir', type=str, default='./data/preprocessed',
                         help='Directory containing data files')
     parser.add_argument('--subject_id', type=str, default='1066528',
                         help='Subject ID to read data for')
@@ -99,7 +135,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Initialize reader and read data
-    data_reader = DataReader(args.data_dir)
+    print(f"Reading data for subject {args.subject_id} from {
+          Path(args.data_dir).absolute()}")
+    data_reader = DataReader(Path(args.data_dir))
 
     # Read different types of data
     heart_rate_data = data_reader.read_heart_rate(args.subject_id)

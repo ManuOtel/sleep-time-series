@@ -1,17 +1,34 @@
 """
-This module handles preprocessing of the formatted HDF5 data files.
+This module handles preprocessing and testing of formatted HDF5 data files.
 
-The main purpose is to trim the data streams to only include relevant time periods around the sleep labels.
-This reduces the data size by removing periods far from sleep episodes.
+The module processes two types of data:
+
+1. Training Data (Preprocessing):
+   - Trims data streams to relevant time periods around sleep labels
+   - Normalizes data using training set statistics (mean/std)
+   - Used for model training and validation
+   - Saved as preprocessed HDF5 files
+
+2. Testing/API Data:
+   - Same trimming and cleaning as training data
+   - No normalization applied since mean/std unknown at inference time
+   - Used for model evaluation and real-world predictions
+   - Saved as separate test HDF5 files
 
 The module contains a DataPreprocessor class that:
     1. Takes formatted HDF5 files as input
-    2. Trims each data stream to a window around the sleep labels
-    3. Saves the trimmed data in a new HDF5 file
-    4. Processes entire dataset maintaining same structure
+    2. For preprocessing training data:
+        - Trims each data stream to a window around the sleep labels
+        - Normalizes data streams using training set statistics
+        - Saves the preprocessed data in a new HDF5 file
+    3. For testing/API data:
+        - Trims data streams similarly but skips normalization step
+        - Saves the test data in a separate HDF5 file
+    4. Processes entire dataset maintaining same structure for both modes
 """
 
 import h5py
+import json
 import logging
 import numpy as np
 from tqdm import tqdm
@@ -44,30 +61,48 @@ tqdm_handler.setFormatter(formatter)
 logger.addHandler(tqdm_handler)
 
 
+def set_logging_level(verbose: bool):
+    """Set logging level based on verbose flag"""
+    if verbose:
+        logger.setLevel(logging.INFO)
+    else:
+        logger.setLevel(logging.WARNING)
+
+
 class DataPreprocessor:
     """Preprocesses formatted HDF5 files by trimming to relevant time periods"""
 
-    def __init__(self, data_dir: str, output_dir: str):
+    def __init__(self, data_dir: str,
+                 output_dir: str,
+                 test_output_dir: str = None,
+                 verbose: bool = False):
         """Initialize the DataPreprocessor.
 
         This constructor sets up a DataPreprocessor instance by:
         1. Creating a DataReader to load the raw data files
         2. Setting up the output directory for preprocessed files
-        3. Creating the output directory if it doesn't exist
+        3. Setting up the output directory for test files (optional)
+        4. Creating the output directory if it doesn't exist. 
 
         Args:
             data_dir: Path to directory containing the raw data files
             output_dir: Path where preprocessed files will be saved
+            test_output_dir: Path where test files will be saved (optional)
+            verbose: If True, show progress bar and logging info
 
         Note:
             The output directory will be created if it doesn't exist,
             including any necessary parent directories.
         """
-        self.data_reader = DataReader(data_dir)
+        self.data_reader = DataReader(data_dir, verbose=False)
         self.output_dir = Path(output_dir)
+        self.verbose = verbose
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Initialized DataPreprocessor with data_dir={
-                    data_dir} and output_dir={output_dir}")
+        if test_output_dir:
+            self.test_output_dir = Path(test_output_dir)
+            self.test_output_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Initialized DataPreprocessor with data_dir={data_dir} and output_dir={output_dir} and test_output_dir={
+                    test_output_dir}") if test_output_dir else logger.info(f"Initialized DataPreprocessor with data_dir={data_dir} and output_dir={output_dir}")
 
     def _trim_data_to_labels(self, timestamps: np.ndarray, values: np.ndarray,
                              first_label_time: float, last_label_time: float,
@@ -94,6 +129,10 @@ class DataPreprocessor:
         # Find indices within the window
         mask = (timestamps >= start_time) & (timestamps <= end_time)
 
+        if self.verbose:
+            logger.info(f"Trimming data from {
+                        len(timestamps)} to {np.sum(mask)} points")
+
         return timestamps[mask], values[mask] if len(values.shape) == 1 else values[mask, :]
 
     def _fix_monotonic_timestamps(self, timestamps: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -114,7 +153,8 @@ class DataPreprocessor:
         sorted_values = values[sort_idx] if len(
             values.shape) == 1 else values[sort_idx, :]
 
-        logger.info("Fixed non-monotonic timestamps by sorting")
+        if self.verbose:
+            logger.info("Fixed non-monotonic timestamps")
         return sorted_timestamps, sorted_values
 
     def _fix_unrealistic_hr_changes(self, timestamps: np.ndarray, values: np.ndarray,
@@ -156,7 +196,9 @@ class DataPreprocessor:
             smoothed_values[idx:next_valid_idx+1] = np.linspace(
                 values[idx], values[next_valid_idx], num_points)
 
-        logger.info(f"Fixed {len(invalid_idx)} unrealistic heart rate changes")
+        if self.verbose:
+            logger.info(f"Fixed {len(invalid_idx)
+                                 } unrealistic heart rate changes")
         return timestamps, smoothed_values
 
     def _resample_timeseries(self, timestamps: np.ndarray, values: np.ndarray,
@@ -265,8 +307,9 @@ class DataPreprocessor:
                     else:
                         new_values[mask, :] = np.nan
 
-        logger.info(f"Resampled data from {len(timestamps)} to {len(new_timestamps)} points "
-                    f"at {1/target_interval:.3f} Hz using {method} interpolation")
+        if self.verbose:
+            logger.info(f"Resampled data from {len(timestamps)} to {len(new_timestamps)} points "
+                        f"at {1/target_interval:.3f} Hz using {method} interpolation")
 
         return new_timestamps, new_values
 
@@ -293,8 +336,10 @@ class DataPreprocessor:
         # Clip values to valid range
         clipped_values = np.clip(values, motion_range[0], motion_range[1])
 
-        logger.info(f"Clipped {num_invalid} motion values outside range [{
-                    motion_range[0]}, {motion_range[1]}]")
+        if self.verbose:
+            logger.info(f"Clipped {num_invalid} motion values outside range [{
+                        motion_range[0]}, {motion_range[1]}]")
+
         return timestamps, clipped_values
 
     def _generate_empty_steps_data(self, start_time: float, end_time: float,
@@ -319,8 +364,9 @@ class DataPreprocessor:
         # Generate array of zeros for values
         values = np.zeros(num_samples)
 
-        logger.info(f"Generated synthetic steps data with {
-                    num_samples} points")
+        if self.verbose:
+            logger.info(f"Generated synthetic steps data with {
+                        num_samples} points")
         return timestamps, values
 
     def _fix_invalid_labels(self, timestamps: np.ndarray, values: np.ndarray,
@@ -381,8 +427,9 @@ class DataPreprocessor:
             fixed_values = np.concatenate(segments)
 
         num_smoothed = np.sum(fixed_values != values)
-        logger.info(
-            f"Fixed {num_invalid} invalid labels and smoothed {num_smoothed-num_invalid} short duration changes")
+        if self.verbose:
+            logger.info(f"Fixed {num_invalid} invalid labels and smoothed {
+                        num_smoothed-num_invalid} short duration changes")
         return timestamps, fixed_values
 
     def _normalize_data(self, data: np.ndarray, mean: float = None, std: float = None) -> np.ndarray:
@@ -396,13 +443,25 @@ class DataPreprocessor:
         Returns:
             Normalized array
         """
-        if mean is None:
-            mean = np.mean(data)
-        if std is None:
-            std = np.std(data)
-        return (data - mean) / std
+        # Calculate statistics if not provided
+        mean = np.mean(data) if mean is None else mean
+        std = np.std(data) if std is None else std
 
-    def preprocess_subject_data(self, subject_id: str) -> None:
+        # Avoid division by zero
+        if std == 0:
+            logger.warning(
+                "Standard deviation is zero, returning zero-centered data")
+            return data - mean
+
+        if self.verbose:
+            logger.info(f"Normalizing data with mean={
+                        mean:.4f}, std={std:.4f}")
+
+        # Apply z-score normalization
+        normalized_data = (data - mean) / std
+        return normalized_data
+
+    def preprocess_subject_data(self, subject_id: str, test: bool = True):
         """Preprocess and save all data streams for a subject.
 
         This function:
@@ -414,9 +473,13 @@ class DataPreprocessor:
            - Heart rate: 0.2 Hz (every 5 seconds)
            - Motion/steps: Original frequency
         5. Saves preprocessed data to HDF5 file
+        6. Normalizes numeric data streams using z-score normalization
+        7. Handles edge cases like missing data and invalid values
+        8. Logs progress and any issues encountered during processing
 
         Args:
             subject_id (str): Unique identifier for the subject to process
+            test (bool): If True, preprocess test data without normalization
 
         Returns:
             None
@@ -425,10 +488,14 @@ class DataPreprocessor:
             FileNotFoundError: If raw data files for subject cannot be found
             ValueError: If data streams contain invalid values that cannot be fixed
         """
-        logger.info(f"Starting preprocessing for subject {subject_id}")
+        if self.verbose:
+            logger.info(f"Starting preprocessing for subject {subject_id}")
 
-        output_file = self.output_dir / f"{subject_id}.h5"
-        logger.info(f"Writing preprocessed data to {output_file}")
+        # Determine output path based on whether this is test or training data
+        output_file = (
+            self.test_output_dir if test else self.output_dir) / f"{subject_id}.h5"
+        if self.verbose:
+            logger.info(f"Writing preprocessed data to {output_file}")
 
         try:
             # Read all data streams
@@ -480,12 +547,14 @@ class DataPreprocessor:
                 )
 
                 # Normalize heart rate data
-                hr_vals = self._normalize_data(hr_vals)
+                if not test:
+                    hr_vals = self._normalize_data(hr_vals)
 
                 hf.create_dataset('heart_rate/timestamps', data=hr_times)
                 hf.create_dataset('heart_rate/values', data=hr_vals)
-                logger.info(f"Heart rate data reduced from {
-                            len(hr_data.timestamps)} to {len(hr_times)} points")
+                if self.verbose:
+                    logger.info(f"Heart rate data reduced from {
+                        len(hr_data.timestamps)} to {len(hr_times)} points")
 
                 # Process and save motion
                 motion_times, motion_vals = self._trim_data_to_labels(
@@ -506,8 +575,9 @@ class DataPreprocessor:
                 )
                 hf.create_dataset('motion/timestamps', data=motion_times)
                 hf.create_dataset('motion/values', data=motion_vals)
-                logger.info(f"Motion data reduced from {
-                            len(motion_data.timestamps)} to {len(motion_times)} points")
+                if self.verbose:
+                    logger.info(f"Motion data reduced from {
+                        len(motion_data.timestamps)} to {len(motion_times)} points")
 
                 # Process and save steps
                 steps_times, steps_vals = self._trim_data_to_labels(
@@ -529,56 +599,79 @@ class DataPreprocessor:
                     )
                 hf.create_dataset('steps/timestamps', data=steps_times)
                 hf.create_dataset('steps/values', data=steps_vals)
-                logger.info(f"Steps data reduced from {
-                            len(steps_data.timestamps)} to {len(steps_times)} points")
-
-            logger.info(
-                f"Successfully preprocessed data for subject {subject_id}")
+                if self.verbose:
+                    logger.info(f"Steps data reduced from {
+                        len(steps_data.timestamps)} to {len(steps_times)} points")
+            if self.verbose:
+                logger.info(
+                    f"Successfully preprocessed data for subject {subject_id}")
 
         except Exception as e:
             logger.error(f"Error preprocessing data for subject {
                          subject_id}: {str(e)}")
 
-    def preprocess_all_subjects(self, verbose=True):
-        """
-        Preprocess data for all subjects in the input directory
+    def preprocess_all_subjects(self, test: bool = True) -> None:
+        """Preprocess data for all subjects in the input directory.
 
         Args:
-            verbose: If True, show progress bar and logging info
+            test: If True, process data for test set without normalization.
+                 If False, process training data with normalization.
         """
-        if verbose:
+        if self.verbose:
             logger.info("Starting preprocessing for all subjects")
 
         # Get list of all subject files
         subject_files = list(Path(self.data_reader.data_dir).glob("*.h5"))
         subject_ids = [f.stem for f in subject_files]
 
-        if verbose:
+        if self.verbose:
             logger.info(f"Found {len(subject_ids)} subjects to process")
+
+        # Save subject IDs to JSON file
+        subject_ids_path = (Path(self.test_output_dir) if test else Path(
+            self.output_dir)) / "subject_ids.json"
+
+        with open(subject_ids_path, "w") as f:
+            json.dump(subject_ids, f)
 
         # Use tqdm for progress bar if verbose
         subjects_iter = tqdm(
-            subject_ids, desc="Processing subjects") if verbose else subject_ids
+            subject_ids, desc="Processing subjects") if self.verbose else subject_ids
 
         for subject_id in subjects_iter:
-            self.preprocess_subject_data(subject_id)
+            self.preprocess_subject_data(subject_id, test=test)
 
-        if verbose:
+        if self.verbose:
             logger.info("Completed preprocessing for all subjects")
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description='Preprocess formatted data')
-    parser.add_argument('--data_dir', type=str, default='./data/formated/',
+    parser = argparse.ArgumentParser(
+        description='Preprocess and test formatted data')
+    parser.add_argument('-d', '--data_dir', type=str, default='./data/formated/',
                         help='Directory containing formatted data')
-    parser.add_argument('--output_dir', type=str, default='./data/preprocessed/',
+    parser.add_argument('-o', '--output_dir', type=str, default='./data/preprocessed/',
                         help='Directory to save preprocessed data')
-    parser.add_argument('--verbose', action='store_true', default=True,
+    parser.add_argument('-t', '--test_dir', type=str, default='./data/test/',
+                        help='Directory to save test data')
+    parser.add_argument('-v', '--verbose', action='store_true', default=False,
                         help='Show progress bar and logging info')
+    parser.add_argument('-m', '--mode', type=str, choices=['train', 'test', 'all'],
+                        default='all', help='Run test data processing, validation data processing, or both')
 
     args = parser.parse_args()
 
-    preprocessor = DataPreprocessor(args.data_dir, args.output_dir)
-    preprocessor.preprocess_all_subjects(verbose=args.verbose)
+    set_logging_level(args.verbose)
+
+    preprocessor = DataPreprocessor(
+        args.data_dir, args.output_dir, args.test_dir, verbose=args.verbose)
+
+    if args.mode == 'test':
+        preprocessor.preprocess_all_subjects(test=True)
+    elif args.mode == 'train':
+        preprocessor.preprocess_all_subjects(test=False)
+    else:
+        preprocessor.preprocess_all_subjects(test=False)
+        preprocessor.preprocess_all_subjects(test=True)

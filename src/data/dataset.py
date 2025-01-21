@@ -20,7 +20,14 @@ import json
 import torch
 import numpy as np
 from pathlib import Path
-from .reader import DataReader
+try:
+    from .reader import DataReader
+except ImportError:
+    try:
+        from reader import DataReader
+    except ImportError:
+        raise ImportError(
+            "Could not import DataReader from either .reader or reader")
 from typing import Tuple, Dict, Optional
 from torch.utils.data import Dataset, random_split
 
@@ -240,15 +247,15 @@ if __name__ == "__main__":
     # Set up argument parser
     parser = argparse.ArgumentParser(
         description='Test dataset loading and processing')
-    parser.add_argument('--data_dir', type=str, default='./data/preprocessed/',
+    parser.add_argument('-d', '--data_dir', type=str, default='./data/preprocessed/',
                         help='Directory containing preprocessed data')
-    parser.add_argument('--fold_id', type=int, default=0,
+    parser.add_argument('-f', '--fold_id', type=int, default=0,
                         help='Fold ID for cross validation')
-    parser.add_argument('--batch_size', type=int, default=512,
+    parser.add_argument('-b', '--batch_size', type=int, default=512,
                         help='Batch size for data loading')
-    parser.add_argument('--num_workers', type=int, default=4,
+    parser.add_argument('-n', '--num_workers', type=int, default=4,
                         help='Number of worker processes for data loading')
-    parser.add_argument('--valid_ratio', type=float, default=0.1,
+    parser.add_argument('-v', '--valid_ratio', type=float, default=0.1,
                         help='Ratio of validation data split')
     args = parser.parse_args()
 

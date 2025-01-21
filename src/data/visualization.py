@@ -24,6 +24,16 @@ import numpy as np
 from tqdm import tqdm
 from reader import DataReader
 import matplotlib.pyplot as plt
+import logging
+
+# Configure logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 
 def plot_subject_data(subject_id: str, data_reader: DataReader, save_path: str, verbose: bool = True):
@@ -56,13 +66,13 @@ def plot_subject_data(subject_id: str, data_reader: DataReader, save_path: str, 
         for name, data in [('heart rate', hr_data), ('motion', motion_data),
                            ('steps', steps_data), ('labels', labels_data)]:
             if len(data.timestamps) == 0:
-                print(f"Warning: Empty {name} data for subject {subject_id}")
+                logger.warning(f"Empty {name} data for subject {subject_id}")
 
     # Skip plotting if any stream is empty
     if any(len(data.timestamps) == 0 for data in [hr_data, motion_data, steps_data, labels_data]):
         if verbose:
-            print(f"Skipping plot for subject {
-                  subject_id} due to missing data")
+            logger.warning(f"Skipping plot for subject {
+                           subject_id} due to missing data")
         return
 
     # Create figure with subplots
@@ -188,8 +198,8 @@ if __name__ == "__main__":
                               args.output_dir,
                               verbose=args.verbose)
         except FileNotFoundError as e:
-            print(f"Invalid subject at {subject_id}")
+            logger.error(f"Invalid subject at {subject_id}")
             continue
         except Exception as e:
-            print(f"Error processing subject {subject_id}: {str(e)}")
+            logger.error(f"Error processing subject {subject_id}: {str(e)}")
             continue

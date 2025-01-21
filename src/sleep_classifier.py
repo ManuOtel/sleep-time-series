@@ -237,9 +237,9 @@ if __name__ == "__main__":
     # Test both LSTM and Transformer versions
     batch_size = 2
     example_data = {
-        'heart_rate': torch.randn(batch_size, 120),      # [B, 120]
-        'motion': torch.randn(batch_size, 3000, 3),      # [B, 3000, 3]
-        'steps': torch.randn(batch_size, 1),             # [B, 1]
+        'heart_rate': torch.randn(batch_size, 120),              # [B, 120]
+        'motion': torch.randn(batch_size, 3000, 3),              # [B, 3000, 3]
+        'steps': torch.randn(batch_size, 1),                     # [B, 1]
         'previous_labels': torch.randint(0, 4, (batch_size, 19))  # [B, 19]
     }
 

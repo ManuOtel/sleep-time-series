@@ -1,14 +1,14 @@
 """
 This module checks data files for completeness and validity.
 
-The main purpose is to verify that all required data streams (heart rate, motion, steps, sleep labels) 
+The main purpose is to verify that all required data streams (heart rate, motion, steps, sleep labels)
 are present and contain valid data. It performs comprehensive validation including:
 
 The module contains a DataChecker class that:
     1. Takes preprocessed HDF5 data files as input
     2. Performs configurable validation checks on each data stream, including:
         - Missing or corrupted data files
-        - Empty data streams or invalid values 
+        - Empty data streams or invalid values
         - Non-monotonic timestamps and sampling irregularities
         - Data gaps and coverage issues
         - Value range violations
@@ -17,27 +17,32 @@ The module contains a DataChecker class that:
     3. Reports detailed validation failures and statistics
     4. Can process individual subjects or entire datasets
     5. Optionally renames invalid files and updates subject lists
+    6. Handles siamese directory validation and updates:
+        - Checks for corresponding siamese data files
+        - Renames invalid siamese files
+        - Updates siamese subject ID lists
 """
-
 import json
 import logging
 import numpy as np
 from pathlib import Path
-from reader import DataReader, TimeSeriesData
+from src.data.reader import DataReader, TimeSeriesData
 
+# Configure logging for data checker module
 logging.basicConfig(
     level=logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-logger = logging.getLogger(__name__)
+# Get logger specific to data checker module
+logger = logging.getLogger("data.checker")
 
 
 class DataChecker:
     """Checks data files for completeness and validity.
 
     This class provides functionality to validate preprocessed data files by checking:
-    - Data stream presence and completeness 
+    - Data stream presence and completeness
     - Value ranges and validity
     - Timestamp monotonicity and sampling rates
     - Data gaps and coverage
@@ -47,10 +52,28 @@ class DataChecker:
     validation reports and optionally handling invalid files.
     """
 
-    def __init__(self, data_dir: str):
-        self.data_reader = DataReader(data_dir)
+    def __init__(self, data_dir: str, verbose: bool = False):
+        """Initialize the DataChecker.
+
+        Args:
+            data_dir: Path to directory containing preprocessed HDF5 data files
+            verbose: If True, enable verbose logging output
+
+        Raises:
+            FileNotFoundError: If data directory does not exist
+        """
+        if not Path(data_dir).exists():
+            raise FileNotFoundError(f"Data directory not found: {data_dir}")
+
+        if verbose:
+            logger.setLevel(logging.INFO)
+        else:
+            logger.setLevel(logging.WARNING)
+        self.verbose = verbose
+        self.data_reader = DataReader(data_dir, verbose=False)
         self.data_dir = Path(data_dir)
-        logger.info(f"Initialized DataChecker with data_dir={data_dir}")
+        if self.verbose:
+            logger.info(f"Initialized DataChecker with data_dir={data_dir}")
 
     def _check_empty_streams(self,
                              hr_data: TimeSeriesData,
@@ -65,7 +88,7 @@ class DataChecker:
 
         Args:
             hr_data: Heart rate time series data
-            motion_data: Motion/acceleration time series data  
+            motion_data: Motion/acceleration time series data
             steps_data: Step count time series data
             labels_data: Sleep stage label time series data
             subject_id: Unique identifier for the subject being checked
@@ -144,8 +167,9 @@ class DataChecker:
 
         # Log start and end times for debugging
         for name in start_times:
-            logger.info(f"Subject {subject_id}: {name} data starts at {
-                        start_times[name]:.1f}s and ends at {end_times[name]:.1f}s")
+            if self.verbose:
+                logger.info(f"Subject {subject_id}: {name} data starts at {
+                    start_times[name]:.1f}s and ends at {end_times[name]:.1f}s")
 
         # Find max difference between end times
         max_end_diff = max(end_times.values()) - min(end_times.values())
@@ -231,7 +255,7 @@ class DataChecker:
 
         Args:
             hr_data: TimeSeriesData containing heart rate measurements
-            motion_data: TimeSeriesData containing motion/acceleration data  
+            motion_data: TimeSeriesData containing motion/acceleration data
             steps_data: TimeSeriesData containing step counts
             labels_data: TimeSeriesData containing sleep stage labels
             subject_id: Identifier for the subject being checked
@@ -355,7 +379,7 @@ class DataChecker:
 
         Args:
             hr_data: TimeSeriesData containing heart rate measurements
-            motion_data: TimeSeriesData containing motion/acceleration data  
+            motion_data: TimeSeriesData containing motion/acceleration data
             labels_data: TimeSeriesData containing sleep stage labels
             subject_id: Identifier for the subject being checked
             min_duration: Minimum required duration of recording in seconds
@@ -429,7 +453,8 @@ class DataChecker:
         # Log start and end times for each stream
         # streams = ["heart rate", "motion", "labels"]
         # for stream, start, end in zip(streams, start_times, end_times):
-        #     logger.info(f"Subject {subject_id}: {stream} data starts at {
+        #     if self.verbose:
+        #       logger.info(f"Subject {subject_id}: {stream} data starts at {
         #                 start:.1f}s and ends at {end:.1f}s")
 
         start_diff = max(start_times) - min(start_times)
@@ -461,7 +486,7 @@ class DataChecker:
 
         Performs multiple validation checks on the subject's data streams including:
         - Empty stream detection
-        - Value range validation 
+        - Value range validation
         - Timestamp monotonicity and gaps
         - Sampling rate consistency
         - Data coverage and alignment
@@ -473,7 +498,7 @@ class DataChecker:
             motion_range: Valid range for motion values (min, max)
             max_allowed_gap: Maximum allowed gap between samples in seconds
             heart_rate_rate: Expected heart rate sampling frequency in Hz
-            motion_rate: Expected motion sampling frequency in Hz  
+            motion_rate: Expected motion sampling frequency in Hz
             steps_rate: Expected steps sampling frequency in Hz
             labels_rate: Expected labels sampling frequency in Hz
             min_duration: Minimum required duration of data in seconds
@@ -484,7 +509,8 @@ class DataChecker:
             - bool: True if all checks pass, False otherwise
             - str: Empty string if valid, error message if invalid
         """
-        logger.info(f"Checking data for subject {subject_id}")
+        if self.verbose:
+            logger.info(f"Checking data for subject {subject_id}")
 
         try:
             # Read all data streams
@@ -519,7 +545,8 @@ class DataChecker:
                 if not valid:
                     return False, reason
 
-            logger.info(f"All checks passed for subject {subject_id}")
+            if self.verbose:
+                logger.info(f"All checks passed for subject {subject_id}")
             return True, ""
 
         except FileNotFoundError:
@@ -530,7 +557,8 @@ class DataChecker:
                          subject_id}: {str(e)}")
             return False, f"Error checking data: {str(e)}"
 
-    def check_all_subjects(self, verbose: bool = True, modify_invalid: bool = False) -> dict[str, bool]:
+    def check_all_subjects(self, modify_invalid: bool = False,
+                           siamese_dir: str | None = None) -> dict[str, bool]:
         """
         Check data for all subjects in the input directory and return validation results.
 
@@ -538,10 +566,10 @@ class DataChecker:
         and optionally renames invalid files and updates the subject list.
 
         Args:
-            verbose (bool): If True, print detailed summary of validation failures. 
-                          If False, just return results silently. Defaults to True.
-            modify_invalid (bool): If True, rename invalid subject files by prepending "INVALID_" 
+            modify_invalid (bool): If True, rename invalid subject files by prepending "INVALID_"
                                  and remove them from subject_ids.json. Defaults to False.
+            siamese_dir (str): Optional directory containing Siamese data files to modify.
+                               Works in conjunction with modify_invalid to rename Siamese files.
 
         Returns:
             dict[str, bool]: Dictionary mapping subject IDs (str) to their validation results (bool).
@@ -581,44 +609,68 @@ class DataChecker:
                     invalid_file = self.data_dir / f"INVALID_{subject_id}.h5"
                     if orig_file.exists():
                         orig_file.rename(invalid_file)
-                        logger.info(
-                            f"Renamed invalid file for subject {subject_id}")
+                        if self.verbose:
+                            logger.info(
+                                f"Renamed invalid file for subject {subject_id}")
+
+                    # Also rename file in siamese directory if it exists
+                    if siamese_dir:
+                        siamese_orig = Path(siamese_dir) / f"{subject_id}.h5"
+                        siamese_invalid = Path(
+                            siamese_dir) / f"INVALID_{subject_id}.h5"
+                        if siamese_orig.exists():
+                            siamese_orig.rename(siamese_invalid)
+                            if self.verbose:
+                                logger.info(
+                                    f"Renamed invalid siamese file for subject {subject_id}")
 
         if modify_invalid:
             # Update subject_ids.json with only valid subjects
             with open(subject_ids_file, 'w') as f:
                 json.dump(valid_subject_ids, f)
-            logger.info("Updated subject_ids.json with valid subjects only")
+            if self.verbose:
+                logger.info(
+                    "Updated subject_ids.json with valid subjects only")
+            # Also update subject_ids.json in siamese directory if it exists
+            if siamese_dir:
+                siamese_subject_ids = Path(siamese_dir) / "subject_ids.json"
+                if siamese_subject_ids.exists():
+                    with open(siamese_subject_ids, 'w') as f:
+                        json.dump(valid_subject_ids, f)
+                    if self.verbose:
+                        logger.info(
+                            "Updated siamese subject_ids.json with valid subjects only")
 
-        if verbose:
-            # Print summary of failures
-            print("\n" + "="*50)
-            print("DATA CHECK FAILURES")
-            print("="*50)
+        if self.verbose:
+            # Log summary of failures
+            logger.info("\n" + "="*50)
+            logger.info("DATA CHECK FAILURES")
+            logger.info("="*50)
 
             total_subjects = len(subject_ids)
             failed_count = len(failed_subjects)
             fail_rate = (failed_count / total_subjects) * 100
 
-            print(f"\nOverall Statistics:")
-            print(f"Total Subjects: {total_subjects}")
-            print(f"Failed Subjects: {failed_count}")
-            print(f"Failure Rate: {fail_rate:.1f}%")
+            logger.info(f"\nOverall Statistics:")
+            logger.info(f"Total Subjects: {total_subjects}")
+            logger.info(f"Failed Subjects: {failed_count}")
+            logger.info(f"Failure Rate: {fail_rate:.1f}%")
 
             if failed_subjects:
-                print("\nFailure Reasons Breakdown:")
+                logger.info("\nFailure Reasons Breakdown:")
                 for reason, count in failure_counts.items():
                     percentage = (count / failed_count) * 100
-                    print(f"- {reason}: {count} subjects ({percentage:.1f}%)")
+                    logger.info(
+                        f"- {reason}: {count} subjects ({percentage:.1f}%)")
 
-                print("\nDetailed Failures:")
+                logger.info("\nDetailed Failures:")
                 for subject_id, failure in failed_subjects.items():
-                    print(f"\nSubject {subject_id} failed:")
-                    print(f"- {failure}")
+                    logger.info(f"\nSubject {subject_id} failed:")
+                    logger.info(f"- {failure}")
             else:
-                print("\nAll subjects passed data checks")
+                logger.info("\nAll subjects passed data checks")
 
-            print("\n" + "="*50)
+            logger.info("\n" + "="*50)
 
         return results
 
@@ -628,15 +680,48 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         description='Check data files for completeness and validity')
-    parser.add_argument('--data_dir', type=str, default='./data/preprocessed/',
+    parser.add_argument('-d', '--data_dir', type=str, default='./data/test/',
                         help='Directory containing data files to check')
-    parser.add_argument('--modify_invalid', action='store_true', default=False,
-                        help='If set, rename invalid files and update subject_ids.json')
+    parser.add_argument('-m', '--modify_invalid', action='store_true', default=False,
+                        help='If True, modify invalid files and update subject lists')
+    parser.add_argument('-s', '--siamese_dir', type=str, default=None,
+                        help='Directory containing siamese data files to modify')
+    parser.add_argument('-v', '--verbose', action='store_true', default=False,
+                        help='Show progress bar and logging info')
 
     args = parser.parse_args()
 
-    checker = DataChecker(args.data_dir)
-    checker.check_all_subjects(modify_invalid=args.modify_invalid)
+    checker = DataChecker(args.data_dir, verbose=args.verbose)
+    data = checker.check_all_subjects(
+        modify_invalid=args.modify_invalid, siamese_dir=args.siamese_dir)
+
+    # Print summary of results
+    print("\n" + "="*50)
+    print("DATA CHECK RESULTS".center(50))
+    print("="*50)
+
+    total_subjects = len(data)
+    # Change this line - now we check the boolean value directly
+    failed_subjects = {id: result for id, result in data.items() if not result}
+    failed_count = len(failed_subjects)
+    fail_rate = (failed_count / total_subjects) * 100
+
+    print(f"\nOverall Statistics:")
+    print(f"Total Subjects: {total_subjects}")
+    print(f"Failed Subjects: {failed_count}")
+    print(f"Failure Rate: {fail_rate:.1f}%")
+
+    if failed_subjects:
+        print("\nDetailed Failures:")
+        for subject_id in failed_subjects:
+            # Get the failure reason by running the check again
+            _, error = checker.check_subject_data(subject_id)
+            print(f"\nSubject {subject_id} failed:")
+            print(f"- {error}")
+    else:
+        print("\nAll subjects passed data checks")
+
+    print("\n" + "="*50)
 
     # Print Exmaple
     # ==================================================
