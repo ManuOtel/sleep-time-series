@@ -1,6 +1,6 @@
 """
 This module handles API key generation and management for the Sleep Stage Classification API.
-(No, this is not the kind of keygen one may used to download from shady websites to crack MS Office or NFS Most Wanted! 😂😂)
+(No, this is not the kind of keygen one may used to download from 'shady'(word suggested by ChatGPT lol) websites to crack MS Office or NFS Most Wanted! 😂😂)
 
 The main purpose is to generate secure API keys and store them in the environment file.
 The module provides functionality to:

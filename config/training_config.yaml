@@ -1,5 +1,5 @@
 training:
-  num_workers: 4
+  num_workers: 1
   max_parallel: 2
   data_dir: "./data/preprocessed/"
 

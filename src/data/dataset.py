@@ -1,7 +1,7 @@
 """
 This module provides a PyTorch Dataset for sleep stage classification using multimodal time series data.
 
-The main purpose is to load and prepare preprocessed sensor data (heart rate, motion, steps) and sleep 
+The main purpose is to load and prepare preprocessed sensor data (heart rate, motion, steps) and sleep
 stage labels for training deep learning models. It handles:
 
 The module contains a SleepDataset class that:
@@ -9,7 +9,7 @@ The module contains a SleepDataset class that:
     2. Creates fixed-length sequences with configurable stride for sequence models
     3. Performs configurable validation checks on each data stream, including:
         - Cross-validation 10-fold splitting
-        - Train/validation/test set creation 
+        - Train/validation/test set creation
         - Data normalization and preprocessing
         - Batch generation for training
     4. Reports detailed validation failures and statistics
@@ -36,7 +36,7 @@ class SleepDataset(Dataset):
     """Dataset class for sleep stage classification using multimodal time series data.
 
     This class loads preprocessed sensor data (heart rate, motion, steps) and sleep stage labels
-    from HDF5 files. It creates fixed-length sequences with optional stride for training 
+    from HDF5 files. It creates fixed-length sequences with optional stride for training
     sequence models like LSTM or Transformers.
 
     Args:
@@ -289,6 +289,10 @@ if __name__ == "__main__":
     import time
     import argparse
     from torch.utils.data import DataLoader
+    #### This is for dataloader ####
+    import multiprocessing
+    # Set start method to spawn
+    multiprocessing.set_start_method('spawn', force=True)
 
     # Set up argument parser
     parser = argparse.ArgumentParser(
@@ -328,7 +332,7 @@ if __name__ == "__main__":
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
-        num_workers=args.num_workers,
+        num_workers=1,  # args.num_workers,
         persistent_workers=True,
         pin_memory=True
     )
@@ -361,15 +365,14 @@ if __name__ == "__main__":
     print("=" * 50)
 
     # Get all sequences for this subject
-    subject_sequences = [i for i in range(len(train_dataset))
-                         if train_dataset.reader.current_subject == subject_id]
-
+    subject_data = train_dataset.get_sequences_for_subject(subject_id)
     print(f"Number of sequences for subject {
-          subject_id}: {len(subject_sequences)}")
+          subject_id}: {len(subject_data['sequences'])}")
 
-    if len(subject_sequences) > 0:
+    if len(subject_data['sequences']) > 0:
         # Get first sequence for this subject
-        seq, lbl = train_dataset[subject_sequences[0]]
+        seq = subject_data['sequences'][0]
+        lbl = subject_data['labels'][0]
 
         print("\nExample Sequence Stats:")
         print(f"Heart Rate - Mean: {seq['heart_rate'].mean():.1f}, "
@@ -384,22 +387,34 @@ if __name__ == "__main__":
         print(f"Current Sleep Stage: {torch.argmax(lbl).item()}")
 
     #### Print Example ####
-    # Dataset creation time: 30.29 seconds
+    # Dataset Loading Summary
+    # ==================================================
+    # Dataset creation time: 37.54 seconds
     # Train sequences: 18998
     # Valid sequences: 2110
     # Test sequences: 2297
     # Processed 0 batches...
-    # Processed 100 batches...
-    # Processed 200 batches...
-    # Processed 300 batches...
-    # Processed 400 batches...
-    # Processed 500 batches...
 
-    # Time to iterate all batches: 82.60 seconds
-    # Average time per batch: 0.1391 seconds
+    # Dataloader Performance
+    # ==================================================
+    # Time to iterate all batches: 38.74 seconds
+    # Average time per batch: 1.0195 seconds
 
+    # Sequence Structure
+    # ==================================================
     # Heart Rate shape: torch.Size([120])
     # Motion shape: torch.Size([3000, 3])
     # Steps shape: torch.Size([1])
     # Previous labels shape: torch.Size([19])
     # Label: tensor([0., 0., 1., 0., 0.])
+
+    # Sequences for Subject Analysis
+    # ==================================================
+    # Number of sequences for subject 1066528: 929
+
+    # Example Sequence Stats:
+    # Heart Rate - Mean: 0.6, Min: 0.3, Max: 1.1
+    # Motion Magnitude - Mean: 1.004, Max: 1.006
+    # Steps: 0.0
+    # Previous Sleep Stages: [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+    # Current Sleep Stage: 2

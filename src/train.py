@@ -37,7 +37,7 @@ from pathlib import Path
 from data.dataset import SleepDataset
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from sleep_classifier import SleepClassifierLSTM as SleepClassifier
+from sleep_classifier import SleepClassifierTransformer as SleepClassifier
 # import torch._dynamo
 # torch._dynamo.config.suppress_errors = True
 
@@ -517,7 +517,7 @@ def run_experiment(num_workers: int = 5,
     # Filter out combinations where model already exists
     filtered_combinations = []
     for params in param_combinations:
-        run_name = f"m_e{params['num_epochs']}_lr{params['learning_rate']}_b{
+        run_name = f"t_e{params['num_epochs']}_lr{params['learning_rate']}_b{
             params['batch_size']}_f{params['fold_id']}"
         model_path = base_dir / run_name / 'model.pth'
         if not model_path.exists():
@@ -541,6 +541,10 @@ def run_experiment(num_workers: int = 5,
 
 
 if __name__ == "__main__":
+    #### This is for dataloader ####
+    import multiprocessing
+    # Set start method to spawn
+    multiprocessing.set_start_method('spawn', force=True)
     import argparse
     # Set up argument parser
     parser = argparse.ArgumentParser(
