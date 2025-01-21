@@ -20,22 +20,23 @@ def sample_data_dir(tmp_path):
 @pytest.fixture
 def mock_reader(mocker):
     """Mock DataReader to return sample data"""
-    def mock_read_data(*args):
-        if "heart_rate" in str(args[1]):
+
+    def mock_read_data(self, subject_id, *args):
+        if "heart_rate" in str(subject_id):
             # Heart rate data: ~5000 samples at ~2Hz
             # Match real data timestamps
             timestamps = np.arange(-600000, 0) * 0.5
             # HR between 60-80
             values = 60 + np.random.rand(len(timestamps)) * 20
             return TimeSeriesData(timestamps=timestamps, values=values)
-        elif "motion" in str(args[1]):
+        elif "motion" in str(subject_id):
             # Motion data: ~1M samples at 100Hz with 3 axes
             # Match real data timestamps
             timestamps = np.arange(-125000, 0, 0.01)
             values = np.random.randn(
                 len(timestamps), 3) * 0.5  # 3-axis acceleration
             return TimeSeriesData(timestamps=timestamps, values=values)
-        elif "steps" in str(args[1]):
+        elif "steps" in str(subject_id):
             # Steps data: ~1400 samples at 0.1Hz
             # Match real data timestamps
             timestamps = np.arange(-605000, 0, 600)

@@ -1,6 +1,7 @@
 import os
 import torch
 import logging
+import numpy as np
 from typing import List, Dict
 from dotenv import load_dotenv
 from slowapi.util import get_remote_address
@@ -252,6 +253,12 @@ async def predict(
         previous_labels = previous_labels.unsqueeze(0)
         # Convert any class 5 labels to class 4 in previous labels
         previous_labels = torch.where(previous_labels == 5, 4, previous_labels)
+
+        # Normalize heart rate values
+        # Normalize heart rate values using mean and std
+        heart_rate_mean = heart_rate.mean()
+        heart_rate_std = heart_rate.std()
+        heart_rate = (heart_rate - heart_rate_mean) / (heart_rate_std + 1e-8)
 
         # Create input dictionary
         model_input = {

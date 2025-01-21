@@ -115,6 +115,7 @@ class SleepDataset(Dataset):
         # Load and preprocess all data
         self.sequences = []
         self.labels = []
+        self.sequence_metadata = []
 
         for subject_id in self.subject_ids:
             # Load all data streams
@@ -165,6 +166,14 @@ class SleepDataset(Dataset):
                 if len(labels_in_window) < 20:  # Skip if we don't have enough labels
                     continue
 
+                metadata = {
+                    'subject_id': subject_id,
+                    'start_time': start_time,
+                    'end_time': end_time,
+                    # timestamp of prediction target
+                    'timestamp': label_data.timestamps[label_mask][-1]
+                }
+
                 # Previous labels are all except the last one
                 previous_labels = labels_in_window[:-1]  # Should be 19 labels
                 # The 20th label to predict
@@ -174,10 +183,12 @@ class SleepDataset(Dataset):
                     'heart_rate': torch.FloatTensor(hr_seq),      # [120, 1]
                     'motion': torch.FloatTensor(motion_seq),      # [3000, 3]
                     'steps': torch.FloatTensor(steps_seq),        # [1-2, 1]
+                    # [19, 1]
                     'previous_labels': torch.LongTensor(previous_labels)
                 }
 
                 self.sequences.append(sequence)
+                self.sequence_metadata.append(metadata)
                 # Only storing the last label as target
                 self.labels.append(current_label)
         # Convert labels to one-hot encoded tensors
@@ -229,6 +240,41 @@ class SleepDataset(Dataset):
                 [(0, 0)] * (seq.ndim - 1)
             return np.pad(seq, pad_width, mode='constant', constant_values=0)
         return seq
+
+    def get_sequences_for_subject(self, subject_id: str) -> Dict:
+        """Get all sequences and metadata for a specific subject.
+
+        Args:
+            subject_id: The subject ID to retrieve sequences for
+
+        Returns:
+            Dictionary containing:
+                - sequences: List of sequence dictionaries (heart_rate, motion, steps, previous_labels)
+                - labels: Tensor of labels for each sequence
+                - timestamps: List of timestamps for each sequence
+                - indices: Original indices in the dataset for each sequence
+        """
+        # Find all indices for this subject
+        subject_indices = [
+            idx for idx, meta in enumerate(self.sequence_metadata)
+            if meta['subject_id'] == subject_id
+        ]
+
+        if not subject_indices:
+            raise ValueError(f"No sequences found for subject {subject_id}")
+
+        # Gather all data for these indices
+        subject_sequences = [self.sequences[idx] for idx in subject_indices]
+        subject_labels = self.labels[subject_indices]
+        subject_timestamps = [self.sequence_metadata[idx]
+                              ['timestamp'] for idx in subject_indices]
+
+        return {
+            'sequences': subject_sequences,
+            'labels': subject_labels,
+            'timestamps': subject_timestamps,
+            'indices': subject_indices
+        }
 
     def __len__(self) -> int:
         """Return number of sequences in dataset"""
@@ -308,6 +354,34 @@ if __name__ == "__main__":
     print(f"Steps shape: {sequence['steps'].shape}")
     print(f"Previous labels shape: {sequence['previous_labels'].shape}")
     print(f"Label: {label}")
+
+    # Get sequences for a specific subject
+    subject_id = "1066528"  # Example subject ID
+    print("\nSequences for Subject Analysis")
+    print("=" * 50)
+
+    # Get all sequences for this subject
+    subject_sequences = [i for i in range(len(train_dataset))
+                         if train_dataset.reader.current_subject == subject_id]
+
+    print(f"Number of sequences for subject {
+          subject_id}: {len(subject_sequences)}")
+
+    if len(subject_sequences) > 0:
+        # Get first sequence for this subject
+        seq, lbl = train_dataset[subject_sequences[0]]
+
+        print("\nExample Sequence Stats:")
+        print(f"Heart Rate - Mean: {seq['heart_rate'].mean():.1f}, "
+              f"Min: {seq['heart_rate'].min():.1f}, "
+              f"Max: {seq['heart_rate'].max():.1f}")
+
+        print(f"Motion Magnitude - Mean: {torch.norm(seq['motion'], dim=1).mean():.3f}, "
+              f"Max: {torch.norm(seq['motion'], dim=1).max():.3f}")
+
+        print(f"Steps: {seq['steps'].item()}")
+        print(f"Previous Sleep Stages: {seq['previous_labels'].tolist()}")
+        print(f"Current Sleep Stage: {torch.argmax(lbl).item()}")
 
     #### Print Example ####
     # Dataset creation time: 30.29 seconds
