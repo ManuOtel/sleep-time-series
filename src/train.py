@@ -36,8 +36,9 @@ import concurrent.futures
 from pathlib import Path
 from data.dataset import SleepDataset
 from torch.utils.data import DataLoader
+from models.lstm import SleepClassifierLSTM
+from models.transformer import SleepClassifierTransformer
 from torch.utils.tensorboard import SummaryWriter
-from sleep_classifier import SleepClassifierTransformer as SleepClassifier
 # import torch._dynamo
 # torch._dynamo.config.suppress_errors = True
 
@@ -334,7 +335,8 @@ def train_model(model: nn.Module,
     return history
 
 
-def run_single_experiment(params: dict[str, float | int],
+def run_single_experiment(model: str,
+                          params: dict[str, float | int],
                           base_dir: Path,
                           num_workers: int,
                           data_dir: str | Path,
@@ -343,6 +345,7 @@ def run_single_experiment(params: dict[str, float | int],
     """Run a single training experiment with the given hyperparameters and configuration.
 
     Args:
+        model: Name of the model to train
         params: Dictionary containing training hyperparameters:
             - num_epochs: Number of training epochs
             - learning_rate: Learning rate for optimizer
@@ -368,9 +371,8 @@ def run_single_experiment(params: dict[str, float | int],
         ValueError: If invalid parameter values are provided
     """
     try:
-        # Create run directory
-        run_name = f"m_e{params['num_epochs']}_lr{params['learning_rate']}_b{
-            params['batch_size']}_f{params['fold_id']}"
+        run_name = f"{'t' if model == 'transformer' else 'm'}_e{params['num_epochs']}_lr{
+            params['learning_rate']}_b{params['batch_size']}_f{params['fold_id']}"
         run_dir = base_dir / run_name
         run_dir.mkdir(exist_ok=True)
 
@@ -423,7 +425,11 @@ def run_single_experiment(params: dict[str, float | int],
         # Initialize model
         if verbose:
             safe_log(f"[{run_name}] Initializing model...")
-        model = SleepClassifier()
+        if model == "lstm":
+            model_class = SleepClassifierLSTM
+        else:
+            model_class = SleepClassifierTransformer
+        model = model_class(num_classes=5)
         device = "cuda" if torch.cuda.is_available() else "cpu"
         if verbose:
             safe_log(f"[{run_name}] Training on device: {device}")
@@ -474,7 +480,8 @@ def run_single_experiment(params: dict[str, float | int],
         raise
 
 
-def run_experiment(num_workers: int = 5,
+def run_experiment(model: str = "lstm",
+                   num_workers: int = 5,
                    data_dir: str = "data/preprocessed",
                    param_grid: dict[str, list[int | float]] = {'num_epochs': [10, 25, 50, 100],
                                                                'learning_rate': [0.0001, 0.0003, 0.001, 0.003],
@@ -491,6 +498,7 @@ def run_experiment(num_workers: int = 5,
     4. Saves the model weights and training history
 
     Args:
+        model: Name of the model to train. Defaults to 'lstm'.
         num_workers: Number of worker processes for data loading. Defaults to 5.
         data_dir: Path to directory containing preprocessed HDF5 data files. 
             Defaults to "data/preprocessed".
@@ -505,7 +513,6 @@ def run_experiment(num_workers: int = 5,
         ValueError: If param_grid is missing required parameters
         FileNotFoundError: If data_dir does not exist
     """
-
     # Create base model directory
     base_dir = Path("./models")
     base_dir.mkdir(exist_ok=True)
@@ -517,8 +524,8 @@ def run_experiment(num_workers: int = 5,
     # Filter out combinations where model already exists
     filtered_combinations = []
     for params in param_combinations:
-        run_name = f"t_e{params['num_epochs']}_lr{params['learning_rate']}_b{
-            params['batch_size']}_f{params['fold_id']}"
+        run_name = f"{'t' if model == 'transformer' else 'm'}_e{params['num_epochs']}_lr{
+            params['learning_rate']}_b{params['batch_size']}_f{params['fold_id']}"
         model_path = base_dir / run_name / 'model.pth'
         if not model_path.exists():
             filtered_combinations.append(params)
@@ -530,6 +537,7 @@ def run_experiment(num_workers: int = 5,
         futures = [
             executor.submit(
                 run_single_experiment,
+                model,
                 params,
                 base_dir,
                 num_workers,
@@ -565,6 +573,7 @@ if __name__ == "__main__":
     config = load_config(args.config, args.experiment)
 
     run_experiment(
+        model=config['training']['model'],
         num_workers=config['training']['num_workers'],
         data_dir=config['training']['data_dir'],
         param_grid=config['manu_test'],

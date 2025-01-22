@@ -20,11 +20,11 @@ The plot_subject_data() function is the main entry point used to generate plots
 for individual subjects or batches of subjects.
 """
 
+import logging
 import numpy as np
 from tqdm import tqdm
 from reader import DataReader
 import matplotlib.pyplot as plt
-import logging
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -167,7 +167,7 @@ if __name__ == "__main__":
         description='Generate plots for subject data')
     parser.add_argument('--data_dir', type=str, default='./data/formated/',
                         help='Directory containing formatted data')
-    parser.add_argument('--output_dir', type=str, default='./data_visualization/',
+    parser.add_argument('--output_dir', type=str, default='./visualization/',
                         help='Directory to save plots')
     parser.add_argument('--num_subjects', type=int, default=-1,
                         help='Number of random subjects to plot')

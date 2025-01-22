@@ -171,16 +171,26 @@ cython_debug/
 .pypirc
 
 # Data folder
-data/**/*.txt
-data/**/*.h5
+/data/**/*.txt
+/data/**/*.h5
+/data/**/*.zip
+/data/**/*.json
+/data/**/*.xml
 
 # Models
-models/
+/models/
 
-# Elon''s Maps
+# Docker working folder
+/docker/*
+
+# Visualizations
+/visualizations/
+
+# Elon's Maps
 plan.md
 track.md
 pip_req.py
 check.py
 backup/
 *_code.py
+/docs

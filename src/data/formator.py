@@ -195,8 +195,7 @@ class DataFormator:
 
         for i, subject_id in enumerate(subject_ids, 1):
             if self.verbose:
-                logger.info(f"Processing subject {
-                    i}/{len(subject_ids)}: {subject_id}")
+                logger.info(f"Processing subject {i}/{len(subject_ids)}: {subject_id}")
             self.convert_subject_data(subject_id)
 
         if self.verbose:

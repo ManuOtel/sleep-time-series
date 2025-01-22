@@ -1,0 +1,43 @@
+
+# Inference API configuration
+api:
+  host: "0.0.0.0"
+  port: 6969
+  workers: 4
+  timeout: 30
+  rate_limit: "1000/minute"
+
+# Model configuration  
+model: # HERE PATH TO THE MODEL MUST RESPECT THE MODEL TYPE (TRANSFORMER(T) OR LSTM(M))
+  path: "./models/t_e10_lr0.0003_b512_f6/model.pth"  # Path to trained model weights
+  type: "transformer"  # Model architecture to use ['lstm', 'transformer']
+
+# Input validation settings
+validation:
+  heart_rate:
+    min_length: 1
+    max_length: 120
+    min_value: 30
+    max_value: 200
+  
+  motion:
+    min_length: 1 
+    max_length: 3000
+    dimensions: 3
+    min_value: -20
+    max_value: 20
+    
+  steps:
+    min_value: 0
+    
+  previous_labels:
+    min_length: 1
+    max_length: 19
+    min_value: 0 
+    max_value: 4
+
+# Preprocessing settings
+preprocessing:
+  normalize_heart_rate: true
+  pad_sequences: true
+  truncate_sequences: true

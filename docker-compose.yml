@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  steepsoft-sleep:
+    build: .
+    runtime: nvidia  # Enable NVIDIA runtime
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    ports:
+      - "6969:6969"
+    volumes:
+      - ./docker/data:/app/data
+      - ./docker/visualizations:/app/visualizations
+      - ./docker/models:/app/models
+      - ./docker/logs:/app/logs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

@@ -1,22 +1,27 @@
+# General training settings
 training:
-  num_workers: 1
-  max_parallel: 2
-  data_dir: "./data/preprocessed/"
+  num_workers: 1          # Number of worker processes for data loading
+  max_parallel: 2         # Maximum number of parallel training runs
+  data_dir: "./data/preprocessed/"  # Directory containing preprocessed data
+  model: "transformer"    # Models to be trained ['lstm', 'transformer']
 
+# Configuration for manu's testing with multiple hyperparameters
 manu_test:
   num_epochs: [10]
   learning_rate: [0.0003, 0.001, 0.0001]
   batch_size: [512, 256, 128] 
-  fold_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  fold_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # Cross-validation fold IDs
 
+# Quick test configuration for rapid prototyping
 quick_test:
   num_epochs: [5]
   learning_rate: [0.001]
   batch_size: [256]
   fold_id: [0]
 
+# Full training configuration for production models
 full_training:
   num_epochs: [50, 100]
   learning_rate: [0.0003, 0.001, 0.0001]
   batch_size: [512, 256, 128]
-  fold_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  fold_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # Cross-validation fold IDs
