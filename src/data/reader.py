@@ -64,8 +64,7 @@ class DataReader:
         """Read heart rate data for a given subject"""
         file_path = self.data_dir / f"{subject_id}.h5"
         if self.verbose:
-            logger.info(f"Reading data for subject {
-                subject_id} from {self.data_dir}")
+            logger.info(f"Reading data for subject {subject_id} from {self.data_dir}")
         if not file_path.exists():
             raise FileNotFoundError(f"Data file not found: {file_path}")
         if not file_path.is_file():
@@ -135,8 +134,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Initialize reader and read data
-    print(f"Reading data for subject {args.subject_id} from {
-          Path(args.data_dir).absolute()}")
+    print(f"Reading data for subject {args.subject_id} from {Path(args.data_dir).absolute()}")
     data_reader = DataReader(Path(args.data_dir))
 
     # Read different types of data
@@ -152,26 +150,22 @@ if __name__ == "__main__":
     print(f"Labels shape: {labels.values.shape}")
 
     # Print first n_samples from each data stream
-    print(f"\nFirst {min(args.n_samples, len(
-        heart_rate_data.timestamps))} heart rate samples:")
+    print(f"\nFirst {min(args.n_samples, len(heart_rate_data.timestamps))} heart rate samples:")
     for i in range(min(args.n_samples, len(heart_rate_data.timestamps))):
         t, v = heart_rate_data.timestamps[i], heart_rate_data.values[i]
         print(f"Time: {t:.2f}s, Heart rate: {v}")
 
-    print(f"\nFirst {min(args.n_samples, len(
-        motion_data.timestamps))} motion samples:")
+    print(f"\nFirst {min(args.n_samples, len(motion_data.timestamps))} motion samples:")
     for i in range(min(args.n_samples, len(motion_data.timestamps))):
         t, v = motion_data.timestamps[i], motion_data.values[i]
         print(f"Time: {t:.2f}s, Acceleration (x,y,z): {v}")
 
-    print(f"\nFirst {min(args.n_samples, len(
-        steps_data.timestamps))} steps samples:")
+    print(f"\nFirst {min(args.n_samples, len(steps_data.timestamps))} steps samples:")
     for i in range(min(args.n_samples, len(steps_data.timestamps))):
         t, v = steps_data.timestamps[i], steps_data.values[i]
         print(f"Time: {t:.2f}s, Steps: {v}")
 
-    print(f"\nFirst {min(args.n_samples, len(
-        labels.timestamps))} label samples:")
+    print(f"\nFirst {min(args.n_samples, len(labels.timestamps))} label samples:")
     for i in range(min(args.n_samples, len(labels.timestamps))):
         t, v = labels.timestamps[i], labels.values[i]
         print(f"Time: {t:.2f}s, Sleep stage: {v}")

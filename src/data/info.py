@@ -279,8 +279,7 @@ class DataInfo:
                 stats['labels'] = {'n_samples': 0}
 
         except Exception as e:
-            logger.error(f"Error analyzing data for subject {
-                         subject_id}: {str(e)}")
+            logger.error(f"Error analyzing data for subject {subject_id}: {str(e)}")
             stats = {
                 'heart_rate': {'n_samples': 0},
                 'motion': {'n_samples': 0},
@@ -317,8 +316,7 @@ class DataInfo:
                 try:
                     subject_ids = json.load(f)
                 except json.JSONDecodeError:
-                    raise ValueError(f"Invalid JSON format in {
-                                     subject_ids_file}")
+                    raise ValueError(f"Invalid JSON format in {subject_ids_file}")
 
             if not isinstance(subject_ids, list):
                 raise ValueError(
@@ -349,8 +347,7 @@ class DataInfo:
                                 aggregate_stats[stream]['skewness'].append(
                                     stats[stream]['distribution']['skewness'])
                 except Exception as e:
-                    logger.error(f"Error processing subject {
-                                 subject_id}: {str(e)}")
+                    logger.error(f"Error processing subject {subject_id}: {str(e)}")
                     all_stats[subject_id] = {
                         'heart_rate': {'n_samples': 0},
                         'motion': {'n_samples': 0},
@@ -457,17 +454,13 @@ if __name__ == "__main__":
 
         # Missing Data Section
         print("Missing Data")
-        print(f"  Mean:   {summary[stream]
-              ['missing_data']['mean_pct']:>8.1f}%")
-        print(f"  Median: {summary[stream]
-              ['missing_data']['median_pct']:>8.1f}%")
+        print(f"  Mean:   {summary[stream]['missing_data']['mean_pct']:>8.1f}%")
+        print(f"  Median: {summary[stream]['missing_data']['median_pct']:>8.1f}%")
 
         # Gap Statistics Section
         print("\nGap Statistics")
-        print(f"  Mean Gap: {summary[stream]
-              ['gap_statistics']['mean_gap']:>8.2f}s")
-        print(f"  Max Gap:  {summary[stream]
-              ['gap_statistics']['max_gap']:>8.2f}s")
+        print(f"  Mean Gap: {summary[stream]['gap_statistics']['mean_gap']:>8.2f}s")
+        print(f"  Max Gap:  {summary[stream]['gap_statistics']['max_gap']:>8.2f}s")
 
         # Optional Sampling Rate
         if 'sampling_rate' in summary[stream]:
@@ -477,10 +470,8 @@ if __name__ == "__main__":
         # Optional Distribution Stats
         if 'distribution' in summary[stream]:
             print("\nDistribution")
-            print(f"  Mean Skewness:   {
-                  summary[stream]['distribution']['mean_skewness']:>8.3f}")
-            print(f"  Median Skewness: {
-                  summary[stream]['distribution']['median_skewness']:>8.3f}")
+            print(f"  Mean Skewness:   {summary[stream]['distribution']['mean_skewness']:>8.3f}")
+            print(f"  Median Skewness: {summary[stream]['distribution']['median_skewness']:>8.3f}")
 
     #### Print Example ####
 

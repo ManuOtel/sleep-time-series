@@ -174,15 +174,13 @@ class DataChecker:
         # Find max difference between end times
         max_end_diff = max(end_times.values()) - min(end_times.values())
         if max_end_diff > max(hr_interval, motion_interval, steps_interval, labels_interval):
-            logger.warning(f"Subject {
-                           subject_id}: Data streams have misaligned end times (max difference: {max_end_diff:.1f}s)")
+            logger.warning(f"Subject {subject_id}: Data streams have misaligned end times (max difference: {max_end_diff:.1f}s)")
             return False, "Misaligned data stream end times"
 
         # Check start times are close to 0
         max_start = max(start_times.values())
         if max_start > min(hr_interval, motion_interval, steps_interval, labels_interval):
-            logger.warning(f"Subject {
-                           subject_id}: Data streams have delayed start times (max start: {max_start:.1f}s)")
+            logger.warning(f"Subject {subject_id}: Data streams have delayed start times (max start: {max_start:.1f}s)")
             return False, "Delayed data stream start times"
 
         return True, ""
@@ -236,8 +234,7 @@ class DataChecker:
             return False, "Negative step counts found"
 
         if np.any((labels_data.values < -1) | (labels_data.values > 5)):
-            logger.warning(
-                f"Subject {subject_id}: Invalid sleep stage labels found")
+            logger.warning(f"Subject {subject_id}: Invalid sleep stage labels found")
             return False, "Invalid sleep stage labels"
 
         return True, ""
@@ -309,8 +306,7 @@ class DataChecker:
             large_gaps = gaps > max_allowed_gap
 
             if np.any(large_gaps):
-                logger.warning(f"Subject {subject_id}: Large gaps (>{
-                               max_allowed_gap}s) found in {name} data")
+                logger.warning(f"Subject {subject_id}: Large gaps (>{max_allowed_gap}s) found in {name} data")
                 return False, f"Large gaps in {name} data"
 
             total_duration = data.timestamps[-1] - data.timestamps[0]
@@ -318,8 +314,7 @@ class DataChecker:
             missing_ratio = missing_duration / total_duration
 
             if missing_ratio > max_missing_ratio:
-                logger.warning(f"Subject {subject_id}: Too much missing data in {
-                               name} ({missing_ratio:.1%})")
+                logger.warning(f"Subject {subject_id}: Too much missing data in {name} ({missing_ratio:.1%})")
                 return False, f"Excessive missing data in {name}"
         return True, ""
 
@@ -396,8 +391,7 @@ class DataChecker:
 
         time_range_diff = max(max_times) - min(min_times)
         if time_range_diff < min_duration:
-            logger.warning(f"Subject {subject_id}: Recording duration too short (<{
-                           min_duration/3600:.1f}h)")
+            logger.warning(f"Subject {subject_id}: Recording duration too short (<{min_duration/3600:.1f}h)")
             return False, "Recording duration too short"
 
         latest_start = max(min_times)
@@ -553,8 +547,7 @@ class DataChecker:
             logger.error(f"Data file not found for subject {subject_id}")
             return False, "Data file not found"
         except Exception as e:
-            logger.error(f"Error checking data for subject {
-                         subject_id}: {str(e)}")
+            logger.error(f"Error checking data for subject {subject_id}: {str(e)}")
             return False, f"Error checking data: {str(e)}"
 
     def check_all_subjects(self, modify_invalid: bool = False,

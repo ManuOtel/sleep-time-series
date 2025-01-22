@@ -101,8 +101,7 @@ class DataPreprocessor:
         if test_output_dir:
             self.test_output_dir = Path(test_output_dir)
             self.test_output_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Initialized DataPreprocessor with data_dir={data_dir} and output_dir={output_dir} and test_output_dir={
-                    test_output_dir}") if test_output_dir else logger.info(f"Initialized DataPreprocessor with data_dir={data_dir} and output_dir={output_dir}")
+        logger.info(f"Initialized DataPreprocessor with data_dir={data_dir} and output_dir={output_dir} and test_output_dir={test_output_dir}") if test_output_dir else logger.info(f"Initialized DataPreprocessor with data_dir={data_dir} and output_dir={output_dir}")
 
     def _trim_data_to_labels(self, timestamps: np.ndarray, values: np.ndarray,
                              first_label_time: float, last_label_time: float,
@@ -130,8 +129,7 @@ class DataPreprocessor:
         mask = (timestamps >= start_time) & (timestamps <= end_time)
 
         if self.verbose:
-            logger.info(f"Trimming data from {
-                        len(timestamps)} to {np.sum(mask)} points")
+            logger.info(f"Trimming data from {len(timestamps)} to {np.sum(mask)} points")
 
         return timestamps[mask], values[mask] if len(values.shape) == 1 else values[mask, :]
 
@@ -197,8 +195,7 @@ class DataPreprocessor:
                 values[idx], values[next_valid_idx], num_points)
 
         if self.verbose:
-            logger.info(f"Fixed {len(invalid_idx)
-                                 } unrealistic heart rate changes")
+            logger.info(f"Fixed {len(invalid_idx)} unrealistic heart rate changes")
         return timestamps, smoothed_values
 
     def _resample_timeseries(self, timestamps: np.ndarray, values: np.ndarray,
@@ -337,8 +334,7 @@ class DataPreprocessor:
         clipped_values = np.clip(values, motion_range[0], motion_range[1])
 
         if self.verbose:
-            logger.info(f"Clipped {num_invalid} motion values outside range [{
-                        motion_range[0]}, {motion_range[1]}]")
+            logger.info(f"Clipped {num_invalid} motion values outside range [{motion_range[0]}, {motion_range[1]}]")
 
         return timestamps, clipped_values
 
@@ -365,8 +361,7 @@ class DataPreprocessor:
         values = np.zeros(num_samples)
 
         if self.verbose:
-            logger.info(f"Generated synthetic steps data with {
-                        num_samples} points")
+            logger.info(f"Generated synthetic steps data with {num_samples} points")
         return timestamps, values
 
     def _fix_invalid_labels(self, timestamps: np.ndarray, values: np.ndarray,
@@ -428,8 +423,7 @@ class DataPreprocessor:
 
         num_smoothed = np.sum(fixed_values != values)
         if self.verbose:
-            logger.info(f"Fixed {num_invalid} invalid labels and smoothed {
-                        num_smoothed-num_invalid} short duration changes")
+            logger.info(f"Fixed {num_invalid} invalid labels and smoothed {num_smoothed-num_invalid} short duration changes")
         return timestamps, fixed_values
 
     def _normalize_data(self, data: np.ndarray, mean: float = None, std: float = None) -> np.ndarray:
@@ -454,8 +448,7 @@ class DataPreprocessor:
             return data - mean
 
         if self.verbose:
-            logger.info(f"Normalizing data with mean={
-                        mean:.4f}, std={std:.4f}")
+            logger.info(f"Normalizing data with mean={mean:.4f}, std={std:.4f}")
 
         # Apply z-score normalization
         normalized_data = (data - mean) / std
@@ -553,8 +546,7 @@ class DataPreprocessor:
                 hf.create_dataset('heart_rate/timestamps', data=hr_times)
                 hf.create_dataset('heart_rate/values', data=hr_vals)
                 if self.verbose:
-                    logger.info(f"Heart rate data reduced from {
-                        len(hr_data.timestamps)} to {len(hr_times)} points")
+                    logger.info(f"Heart rate data reduced from {len(hr_data.timestamps)} to {len(hr_times)} points")
 
                 # Process and save motion
                 motion_times, motion_vals = self._trim_data_to_labels(
@@ -576,8 +568,7 @@ class DataPreprocessor:
                 hf.create_dataset('motion/timestamps', data=motion_times)
                 hf.create_dataset('motion/values', data=motion_vals)
                 if self.verbose:
-                    logger.info(f"Motion data reduced from {
-                        len(motion_data.timestamps)} to {len(motion_times)} points")
+                    logger.info(f"Motion data reduced from {len(motion_data.timestamps)} to {len(motion_times)} points")
 
                 # Process and save steps
                 steps_times, steps_vals = self._trim_data_to_labels(
@@ -600,8 +591,7 @@ class DataPreprocessor:
                 hf.create_dataset('steps/timestamps', data=steps_times)
                 hf.create_dataset('steps/values', data=steps_vals)
                 if self.verbose:
-                    logger.info(f"Steps data reduced from {
-                        len(steps_data.timestamps)} to {len(steps_times)} points")
+                    logger.info(f"Steps data reduced from {len(steps_data.timestamps)} to {len(steps_times)} points")
             if self.verbose:
                 logger.info(
                     f"Successfully preprocessed data for subject {subject_id}")

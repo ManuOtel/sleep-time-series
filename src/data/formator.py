@@ -57,8 +57,7 @@ class DataFormator:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         if self.verbose:
-            logger.info(f"Initialized DataPreprocessor with data_dir={
-                data_dir} and output_dir={output_dir}")
+            logger.info(f"Initialized DataPreprocessor with data_dir={data_dir} and output_dir={output_dir}")
 
     def convert_subject_data(self, subject_id: str) -> None:
         """Convert all data files for a single subject to HDF5 format.
@@ -93,8 +92,7 @@ class DataFormator:
                 hf.create_dataset('heart_rate/values',
                                   data=hr_data['heart_rate'].values)
                 if self.verbose:
-                    logger.info(f"Successfully converted heart rate data: {
-                        hr_data.shape[0]} samples")
+                    logger.info(f"Successfully converted heart rate data: {hr_data.shape[0]} samples")
             except FileNotFoundError:
                 logger.error(f"Heart rate data file not found at {hr_path}")
             except Exception as e:
@@ -114,8 +112,7 @@ class DataFormator:
                 hf.create_dataset(
                     'motion/values', data=motion_data[['acc_x', 'acc_y', 'acc_z']].values)
                 if self.verbose:
-                    logger.info(f"Successfully converted motion data: {
-                        motion_data.shape[0]} samples")
+                    logger.info(f"Successfully converted motion data: {motion_data.shape[0]} samples")
             except FileNotFoundError:
                 logger.error(f"Motion data file not found at {motion_path}")
             except Exception as e:
@@ -133,8 +130,7 @@ class DataFormator:
                 hf.create_dataset(
                     'steps/values', data=steps_data['steps'].values)
                 if self.verbose:
-                    logger.info(f"Successfully converted steps data: {
-                        steps_data.shape[0]} samples")
+                    logger.info(f"Successfully converted steps data: {steps_data.shape[0]} samples")
             except FileNotFoundError:
                 logger.error(f"Steps data file not found at {steps_path}")
             except Exception as e:
@@ -153,8 +149,7 @@ class DataFormator:
                 hf.create_dataset(
                     'labels/values', data=labels_data['sleep_stage'].values)
                 if self.verbose:
-                    logger.info(f"Successfully converted labels data: {
-                        labels_data.shape[0]} samples")
+                    logger.info(f"Successfully converted labels data: {labels_data.shape[0]} samples")
             except FileNotFoundError:
                 logger.error(f"Labels data file not found at {labels_path}")
             except Exception as e:

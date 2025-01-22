@@ -10,8 +10,8 @@ from src.data.reader import TimeSeriesData
 @pytest.fixture
 def sample_data_dir(tmp_path):
     """Create temporary directory with sample data files"""
-    # Create subject IDs file with at least 10 subjects to avoid division by zero
-    subject_ids = [f"subject{i}" for i in range(1, 11)]
+    # Create subject IDs file with sample IDs
+    subject_ids = ["1066528", "1360686", "1449548",]
     with open(tmp_path / "subject_ids.json", "w") as f:
         json.dump(subject_ids, f)
     return str(tmp_path)

@@ -163,8 +163,7 @@ def train_model(model: nn.Module,
             for batch_idx, (batch_data, batch_labels) in enumerate(train_loader):
                 try:
                     if verbose:
-                        safe_log(f"[{run_name}] Moving batch {
-                                 batch_idx+1} to device...")
+                        safe_log(f"[{run_name}] Moving batch {batch_idx+1} to device...")
 
                     # Move data to device
                     batch_data = {k: v.to(device)
@@ -201,8 +200,7 @@ def train_model(model: nn.Module,
                           batch_idx+1} loss: {loss.item():.4f}')
 
                 except Exception as e:
-                    safe_log(f'[{run_name}] Error in training batch {
-                             batch_idx}: {str(e)}')
+                    safe_log(f'[{run_name}] Error in training batch {batch_idx}: {str(e)}')
                     raise
 
             # Validation
@@ -222,8 +220,7 @@ def train_model(model: nn.Module,
                 for batch_idx, (batch_data, batch_labels) in enumerate(valid_loader):
                     try:
                         if verbose:
-                            safe_log(f"[{run_name}] Processing validation batch {
-                                     batch_idx+1}...")
+                            safe_log(f"[{run_name}] Processing validation batch {batch_idx+1}...")
 
                         batch_data = {k: v.to(device)
                                       for k, v in batch_data.items()}
@@ -239,16 +236,14 @@ def train_model(model: nn.Module,
                         valid_correct += predicted.eq(true_labels).sum().item()
 
                     except Exception as e:
-                        safe_log(f'[{run_name}] Error in validation batch {
-                                 batch_idx}: {str(e)}')
+                        safe_log(f'[{run_name}] Error in validation batch {batch_idx}: {str(e)}')
                         raise
 
                 # Testing
                 for batch_idx, (batch_data, batch_labels) in enumerate(test_loader):
                     try:
                         if verbose:
-                            safe_log(f"[{run_name}] Processing test batch {
-                                     batch_idx+1}...")
+                            safe_log(f"[{run_name}] Processing test batch {batch_idx+1}...")
 
                         batch_data = {k: v.to(device)
                                       for k, v in batch_data.items()}
@@ -264,8 +259,7 @@ def train_model(model: nn.Module,
                         test_correct += predicted.eq(true_labels).sum().item()
 
                     except Exception as e:
-                        safe_log(f'[{run_name}] Error in test batch {
-                                 batch_idx}: {str(e)}')
+                        safe_log(f'[{run_name}] Error in test batch {batch_idx}: {str(e)}')
                         raise
 
             if verbose:
@@ -304,8 +298,7 @@ def train_model(model: nn.Module,
                 writer.add_scalar(
                     f'{run_name}/Test/Epoch_Accuracy', test_acc, epoch)
 
-            safe_log(f'[{run_name}] Epoch {epoch+1}/{num_epochs} | Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}% | Valid Loss: {
-                     valid_loss:.4f} | Valid Acc: {valid_acc:.2f}% | Test Loss: {test_loss:.4f} | Test Acc: {test_acc:.2f}%')
+            safe_log(f'[{run_name}] Epoch {epoch+1}/{num_epochs} | Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}% | Valid Loss: {valid_loss:.4f} | Valid Acc: {valid_acc:.2f}% | Test Loss: {test_loss:.4f} | Test Acc: {test_acc:.2f}%')
 
     except Exception as e:
         safe_log(f'[{run_name}] Fatal error during training: {str(e)}')
@@ -371,8 +364,7 @@ def run_single_experiment(model: str,
         ValueError: If invalid parameter values are provided
     """
     try:
-        run_name = f"{'t' if model == 'transformer' else 'm'}_e{params['num_epochs']}_lr{
-            params['learning_rate']}_b{params['batch_size']}_f{params['fold_id']}"
+        run_name = f"{'t' if model == 'transformer' else 'm'}_e{params['num_epochs']}_lr{params['learning_rate']}_b{params['batch_size']}_f{params['fold_id']}"
         run_dir = base_dir / run_name
         run_dir.mkdir(exist_ok=True)
 
@@ -441,8 +433,7 @@ def run_single_experiment(model: str,
         model = torch.compile(model, backend='eager')  # , mode='max-autotune')
         # Train model
         if verbose:
-            safe_log(f"\n[{run_name}] Starting run\n[{run_name}] Parameters: {
-                     params}\n[{run_name}] Training model...")
+            safe_log(f"\n[{run_name}] Starting run\n[{run_name}] Parameters: {params}\n[{run_name}] Training model...")
 
         history = train_model(
             model=model,
@@ -524,8 +515,7 @@ def run_experiment(model: str = "lstm",
     # Filter out combinations where model already exists
     filtered_combinations = []
     for params in param_combinations:
-        run_name = f"{'t' if model == 'transformer' else 'm'}_e{params['num_epochs']}_lr{
-            params['learning_rate']}_b{params['batch_size']}_f{params['fold_id']}"
+        run_name = f"{'t' if model == 'transformer' else 'm'}_e{params['num_epochs']}_lr{params['learning_rate']}_b{params['batch_size']}_f{params['fold_id']}"
         model_path = base_dir / run_name / 'model.pth'
         if not model_path.exists():
             filtered_combinations.append(params)

@@ -119,8 +119,7 @@ class SleepData(BaseModel):
         min_val = config['validation']['heart_rate']['min_value']
         max_val = config['validation']['heart_rate']['max_value']
         if not all(min_val <= x <= max_val for x in v):
-            raise ValueError(
-                f"Heart rate values must be between {min_val} and {max_val} bpm")
+            raise ValueError(f"Heart rate values must be between {min_val} and {max_val} bpm")
         return v
 
     @field_validator('motion')
@@ -131,8 +130,7 @@ class SleepData(BaseModel):
         min_val = config['validation']['motion']['min_value']
         max_val = config['validation']['motion']['max_value']
         if not all(min_val <= val <= max_val for row in v for val in row):
-            raise ValueError(f"Motion values must be between {
-                             min_val} and {max_val} g")
+            raise ValueError(f"Motion values must be between {min_val} and {max_val} g")
         return v
 
     @field_validator('previous_labels')
@@ -140,8 +138,7 @@ class SleepData(BaseModel):
         min_val = config['validation']['previous_labels']['min_value']
         max_val = config['validation']['previous_labels']['max_value']
         if not all(min_val <= x <= max_val for x in v):
-            raise ValueError(f"Sleep stage labels must be between {
-                             min_val} and {max_val}")
+            raise ValueError(f"Sleep stage labels must be between {min_val} and {max_val}")
         return v
 
 

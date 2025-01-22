@@ -71,8 +71,7 @@ def plot_subject_data(subject_id: str, data_reader: DataReader, save_path: str, 
     # Skip plotting if any stream is empty
     if any(len(data.timestamps) == 0 for data in [hr_data, motion_data, steps_data, labels_data]):
         if verbose:
-            logger.warning(f"Skipping plot for subject {
-                           subject_id} due to missing data")
+            logger.warning(f"Skipping plot for subject {subject_id} due to missing data")
         return
 
     # Create figure with subplots
@@ -152,8 +151,7 @@ def plot_subject_data(subject_id: str, data_reader: DataReader, save_path: str, 
 
     # Save and close
     plt.tight_layout()
-    plt.savefig(f"{save_path}/{subject_id}_data.png",
-                dpi=300, bbox_inches='tight')
+    plt.savefig(f"{save_path}/{subject_id}_data.png",dpi=300, bbox_inches='tight')
     plt.close()
 
 

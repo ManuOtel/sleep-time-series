@@ -346,8 +346,7 @@ if __name__ == "__main__":
     print("\nDataloader Performance")
     print("=" * 50)
     print(f"Time to iterate all batches: {dataloader_time:.2f} seconds")
-    print(f"Average time per batch: {
-          dataloader_time/len(train_loader):.4f} seconds")
+    print(f"Average time per batch: {dataloader_time/len(train_loader):.4f} seconds")
 
     # Test a sample
     sequence, label = train_dataset[0]
@@ -366,8 +365,7 @@ if __name__ == "__main__":
 
     # Get all sequences for this subject
     subject_data = train_dataset.get_sequences_for_subject(subject_id)
-    print(f"Number of sequences for subject {
-          subject_id}: {len(subject_data['sequences'])}")
+    print(f"Number of sequences for subject {subject_id}: {len(subject_data['sequences'])}")
 
     if len(subject_data['sequences']) > 0:
         # Get first sequence for this subject
