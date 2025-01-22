@@ -7,8 +7,8 @@ from dotenv import load_dotenv
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from src.models.lstm import SleepClassifierLSTM
-from src.models.transformer import SleepClassifierTransformer
+from models.lstm import SleepClassifierLSTM
+from models.transformer import SleepClassifierTransformer
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security.api_key import APIKey, APIKeyHeader

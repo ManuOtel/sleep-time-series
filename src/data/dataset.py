@@ -284,6 +284,16 @@ class SleepDataset(Dataset):
         """Get sequence and label at index"""
         return self.sequences[idx], self.labels[idx]
 
+    def __del__(self):
+        for handle in self.file_handles:
+            try:
+                handle.close()
+            except:
+                pass
+
+    def cleanup(self):
+        self.__del__()
+
 
 if __name__ == "__main__":
     import time

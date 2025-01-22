@@ -25,13 +25,16 @@ The training pipeline supports:
 """
 
 import gc
+import sys
 import yaml
 import json
 import torch
 import logging
 import itertools
 import threading
+import traceback
 import torch.nn as nn
+import multiprocessing
 import concurrent.futures
 from pathlib import Path
 from data.dataset import SleepDataset
@@ -196,8 +199,7 @@ def train_model(model: nn.Module,
                     if verbose:
                         safe_log(f'[{run_name}] Completed batch {batch_idx+1}')
 
-                    print(f'[{run_name}] Batch {
-                          batch_idx+1} loss: {loss.item():.4f}')
+                    print(f'[{run_name}] Batch {batch_idx+1} loss: {loss.item():.4f}')
 
                 except Exception as e:
                     safe_log(f'[{run_name}] Error in training batch {batch_idx}: {str(e)}')
@@ -392,8 +394,8 @@ def run_single_experiment(model: str,
             shuffle=True,
             num_workers=num_workers,
             pin_memory=True,
-            prefetch_factor=4,
-            persistent_workers=True
+            persistent_workers=True,
+            # worker_init_fn=lambda worker_id: np.random.seed(np.random.get_state()[1][0] + worker_id)
         )
         valid_loader = DataLoader(
             valid_dataset,
@@ -401,8 +403,8 @@ def run_single_experiment(model: str,
             shuffle=False,
             num_workers=num_workers,
             pin_memory=True,
-            prefetch_factor=4,
-            persistent_workers=True
+            persistent_workers=True,
+            # worker_init_fn=lambda worker_id: np.random.seed(np.random.get_state()[1][0] + worker_id)
         )
         test_loader = DataLoader(
             test_dataset,
@@ -410,8 +412,8 @@ def run_single_experiment(model: str,
             shuffle=False,
             num_workers=num_workers,
             pin_memory=True,
-            prefetch_factor=4,
-            persistent_workers=True
+            persistent_workers=True,
+            # worker_init_fn=lambda worker_id: np.random.seed(np.random.get_state()[1][0] + worker_id)
         )
 
         # Initialize model
@@ -468,7 +470,22 @@ def run_single_experiment(model: str,
 
     except Exception as e:
         safe_log(f'[{run_name}] Fatal error in experiment: {str(e)}')
+        traceback.print_exc()
         raise
+    finally:
+        try:
+            if 'train_loader' in locals():
+                del train_loader
+            if 'valid_loader' in locals():
+                del valid_loader
+            if 'test_loader' in locals():
+                del test_loader
+            if 'model' in locals():
+                del model
+            torch.cuda.empty_cache()
+            gc.collect()
+        except Exception as e:
+            safe_log(f'Error during cleanup: {str(e)}')
 
 
 def run_experiment(model: str = "lstm",
@@ -539,37 +556,47 @@ def run_experiment(model: str = "lstm",
 
 
 if __name__ == "__main__":
-    #### This is for dataloader ####
-    import multiprocessing
-    # Set start method to spawn
-    multiprocessing.set_start_method('spawn', force=True)
-    import argparse
-    # Set up argument parser
-    parser = argparse.ArgumentParser(
-        description='Train sleep stage classification models')
-    parser.add_argument('-d', '--data_dir', type=str, default='./data/preprocessed/',
-                        help='Directory containing preprocessed data')
-    parser.add_argument('-n', '--num_workers', type=int, default=4,
-                        help='Number of worker processes for data loading')
-    parser.add_argument('-p', '--max_parallel', type=int, default=1,
-                        help='Maximum number of training runs to execute simultaneously')
-    parser.add_argument('-c', '--config', type=str, default='config/training_config.yaml',
-                        help='Path to configuration file')
-    parser.add_argument('-e', '--experiment', type=str,
-                        help='Specific experiment configuration to use (e.g., quick_test)')
-    args = parser.parse_args()
+    try:
+        # Set start method to spawn
+        # multiprocessing.set_start_method('spawn', force=True)
+        import argparse
+        # Set up argument parser
+        parser = argparse.ArgumentParser(
+            description='Train sleep stage classification models')
+        parser.add_argument('-d', '--data_dir', type=str, default='./data/preprocessed/',
+                            help='Directory containing preprocessed data')
+        parser.add_argument('-n', '--num_workers', type=int, default=4,
+                            help='Number of worker processes for data loading')
+        parser.add_argument('-p', '--max_parallel', type=int, default=1,
+                            help='Maximum number of training runs to execute simultaneously')
+        parser.add_argument('-c', '--config', type=str, default='config/training_config.yaml',
+                            help='Path to configuration file')
+        parser.add_argument('-e', '--experiment', type=str,
+                            help='Specific experiment configuration to use (e.g., quick_test)')
+        args = parser.parse_args()
 
-    # Load configuration
-    config = load_config(args.config, args.experiment)
+        # Load configuration
+        config = load_config(args.config, args.experiment)
 
-    run_experiment(
-        model=config['training']['model'],
-        num_workers=config['training']['num_workers'],
-        data_dir=config['training']['data_dir'],
-        param_grid=config['manu_test'],
-        max_parallel=config['training']['max_parallel']
-    )
-
+        run_experiment(
+            model=config['training']['model'],
+            num_workers=args.num_workers if args.num_workers else config['training']['num_workers'],
+            data_dir=config['training']['data_dir'],
+            param_grid=config[args.experiment] if args.experiment else config['manu_test'],
+            max_parallel=args.max_parallel if args.max_parallel else config['training']['max_parallel']
+        )
+    except Exception as e:
+        print(f"Fatal error: {str(e)}")
+        traceback.print_exc()
+        sys.exit(1)
+    finally:
+        # Final cleanup
+        for p in multiprocessing.active_children():
+            p.terminate()
+        torch.cuda.empty_cache()
+        gc.collect()
+    
+    
     #### Print Example ####
     # [m_e10_lr0.0003_b512_f0] Batch 28 loss: 0.4473
     # [m_e10_lr0.0003_b512_f0] Batch 29 loss: 0.3828

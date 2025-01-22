@@ -10,9 +10,9 @@ MODEL_DIR="models"
 
 # Add these missing variables
 LOGS_DIR="logs"  # Used in STEPS 6, 7, and 8
-NUM_WORKERS=4    # Used in STEP 7 for training
-MAX_PARALLEL=2   # Used in STEP 7 for training
-API_PORT=8000    # Used in STEP 8 for inference server
+NUM_WORKERS=1    # Used in STEP 7 for training
+MAX_PARALLEL=1   # Used in STEP 7 for training
+API_PORT=6969    # Used in STEP 8 for inference server
 
 
 
@@ -56,77 +56,97 @@ echo "Download complete. Data saved in ${DATA_DIR}/original/"
 ################################################################################
                    ### STEP 2 - Format the data for training ###
 ################################################################################
-# Create formatted data directory
+# Create formatted data directory if it doesn't exist
 mkdir -p "${DATA_DIR}/formated"
 
-# Run the data formatting script
-echo "Formatting data..."
-python3 src/data/formator.py \
-    --data_dir "${DATA_DIR}/original" \
-    --output_dir "${DATA_DIR}/formated" \
-    --verbose
+# Check if formatted data already exists
+if [ -f "${DATA_DIR}/formated/subject_ids.json" ]; then
+    echo "Formatted data already exists in ${DATA_DIR}/formated/, skipping formatting step..."
+else
+    # Run the data formatting script
+    echo "Formatting data..."
+    python3 src/data/formator.py \
+        --data_dir "${DATA_DIR}/original" \
+        --output_dir "${DATA_DIR}/formated" \
+        --verbose
 
-echo "Data formatting complete. Formatted data saved in ${DATA_DIR}/formated/"
+    echo "Data formatting complete. Formatted data saved in ${DATA_DIR}/formated/"
+fi
 
 
 
 ################################################################################
         ### STEP 3 - Create Visualizations of the original data ###
 ################################################################################
-# Create visualization directory for original data view
-mkdir -p "${VISUALIZATION_DIR}/data/original_view"
+# Check if original data visualizations already exist
+if [ -d "${VISUALIZATION_DIR}/data/original_view" ] && [ "$(ls -A ${VISUALIZATION_DIR}/data/original_view)" ]; then
+    echo "Original data visualizations already exist in ${VISUALIZATION_DIR}/data/original_view/, skipping visualization step..."
+else
+    # Create visualization directory for original data view
+    mkdir -p "${VISUALIZATION_DIR}/data/original_view"
 
-# Generate visualizations for 5 random subjects
-echo "Generating sample visualizations..."
-python3 src/data/visualization.py \
-    --data_dir "${DATA_DIR}/formated" \
-    --output_dir "${VISUALIZATION_DIR}/data/original_view" \
-    --num_subjects 5 \
-    --subject_ids_file "${DATA_DIR}/formated/subject_ids.json" \
-    --verbose
+    # Generate visualizations for 5 random subjects
+    echo "Generating sample visualizations..."
+    python3 src/data/visualization.py \
+        --data_dir "${DATA_DIR}/formated" \
+        --output_dir "${VISUALIZATION_DIR}/data/original_view" \
+        --num_subjects 5 \
+        --subject_ids_file "${DATA_DIR}/formated/subject_ids.json" \
+        --verbose
 
-echo "Sample visualizations complete. Saved in ${VISUALIZATION_DIR}/data/original_view/"
+    echo "Sample visualizations complete. Saved in ${VISUALIZATION_DIR}/data/original_view/"
+fi
 
 
 
 ################################################################################
                 ### STEP 4 - Preprocess the formated data ###
 ################################################################################
-# Create preprocessed data directories
-mkdir -p "${DATA_DIR}/preprocessed"
-mkdir -p "${DATA_DIR}/test"
+# Check if preprocessed data already exists
+if [ -f "${DATA_DIR}/preprocessed/subject_ids.json" ] && [ -f "${DATA_DIR}/test/subject_ids.json" ]; then
+    echo "Preprocessed data already exists in ${DATA_DIR}/preprocessed/ and ${DATA_DIR}/test/, skipping preprocessing step..."
+else
+    # Create preprocessed data directories
+    mkdir -p "${DATA_DIR}/preprocessed"
+    mkdir -p "${DATA_DIR}/test"
 
-# Run the data preprocessing script to create both datasets
-echo "Preprocessing data..."
-python3 src/data/preprocess.py \
-    --data_dir "${DATA_DIR}/formated" \
-    --output_dir "${DATA_DIR}/preprocessed" \
-    --test_dir "${DATA_DIR}/test" \
-    --mode all \
-    --verbose
+    # Run the data preprocessing script to create both datasets
+    echo "Preprocessing data..."
+    python3 src/data/preprocess.py \
+        --data_dir "${DATA_DIR}/formated" \
+        --output_dir "${DATA_DIR}/preprocessed" \
+        --test_dir "${DATA_DIR}/test" \
+        --mode all \
+        --verbose
 
-echo "Data preprocessing complete."
-echo "Training data saved in ${DATA_DIR}/preprocessed/"
-echo "Test data saved in ${DATA_DIR}/test/"
+    echo "Data preprocessing complete."
+    echo "Training data saved in ${DATA_DIR}/preprocessed/"
+    echo "Test data saved in ${DATA_DIR}/test/"
+fi
 
 
 
 ################################################################################
         ### STEP 5 - Create Visualizations of the preprocessed data ###
 ################################################################################
-# Create visualization directory for preprocessed data view
-mkdir -p "${VISUALIZATION_DIR}/data/preprocessed_view"
+# Check if preprocessed data visualizations already exist
+if [ -d "${VISUALIZATION_DIR}/data/preprocessed_view" ] && [ "$(ls -A ${VISUALIZATION_DIR}/data/preprocessed_view)" ]; then
+    echo "Preprocessed data visualizations already exist in ${VISUALIZATION_DIR}/data/preprocessed_view/, skipping visualization step..."
+else
+    # Create visualization directory for preprocessed data view
+    mkdir -p "${VISUALIZATION_DIR}/data/preprocessed_view"
 
-# Generate visualizations for 5 random subjects
-echo "Generating sample visualizations..."
-python3 src/data/visualization.py \
-    --data_dir "${DATA_DIR}/preprocessed" \
-    --output_dir "${VISUALIZATION_DIR}/data/preprocessed_view" \
-    --num_subjects 5 \
-    --subject_ids_file "${DATA_DIR}/formated/subject_ids.json" \
-    --verbose
+    # Generate visualizations for 5 random subjects
+    echo "Generating sample visualizations..."
+    python3 src/data/visualization.py \
+        --data_dir "${DATA_DIR}/preprocessed" \
+        --output_dir "${VISUALIZATION_DIR}/data/preprocessed_view" \
+        --num_subjects 5 \
+        --subject_ids_file "${DATA_DIR}/formated/subject_ids.json" \
+        --verbose
 
-echo "Sample visualizations complete. Saved in ${VISUALIZATION_DIR}/data/preprocessed_view/"
+    echo "Sample visualizations complete. Saved in ${VISUALIZATION_DIR}/data/preprocessed_view/"
+fi
 
 
 
@@ -163,18 +183,18 @@ python3 src/train.py \
     --num_workers "${NUM_WORKERS}" \
     --max_parallel "${MAX_PARALLEL}" \
     --config config/training_config.yaml \
-    --experiment manu_test \
-    2>&1 | tee "${LOGS_DIR}/training/training.log" &
+    --experiment demo \
+    2>&1 | tee "${LOGS_DIR}/training/training.log"
 
 # Get the PID of the training process
-TRAIN_PID=$!
+# TRAIN_PID=$!
 
-echo "Training process started with PID: $TRAIN_PID"
-echo "Training logs being written to ${LOGS_DIR}/training/training.log"
+# echo "Training process started with PID: $TRAIN_PID"
+# echo "Training logs being written to ${LOGS_DIR}/training/training.log"
 
 # Wait for training process to complete
-echo "Waiting for training to complete..."
-wait $TRAIN_PID
+# echo "Waiting for training to complete..."
+# wait $TRAIN_PID
 
 # Check if training completed successfully
 if [ $? -eq 0 ]; then

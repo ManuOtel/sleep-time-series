@@ -26,7 +26,7 @@ import json
 import logging
 import numpy as np
 from pathlib import Path
-from src.data.reader import DataReader, TimeSeriesData
+from reader import DataReader, TimeSeriesData
 
 # Configure logging for data checker module
 logging.basicConfig(
@@ -168,8 +168,7 @@ class DataChecker:
         # Log start and end times for debugging
         for name in start_times:
             if self.verbose:
-                logger.info(f"Subject {subject_id}: {name} data starts at {
-                    start_times[name]:.1f}s and ends at {end_times[name]:.1f}s")
+                logger.info(f"Subject {subject_id}: {name} data starts at {start_times[name]:.1f}s and ends at {end_times[name]:.1f}s")
 
         # Find max difference between end times
         max_end_diff = max(end_times.values()) - min(end_times.values())
@@ -220,13 +219,11 @@ class DataChecker:
             ValueError: If range parameters are invalid
         """
         if np.any((hr_data.values < hr_range[0]) | (hr_data.values > hr_range[1])):
-            logger.warning(f"Subject {subject_id}: Heart rate values outside normal range ({
-                           hr_range[0]}-{hr_range[1]} bpm)")
+            logger.warning(f"Subject {subject_id}: Heart rate values outside normal range ({hr_range[0]}-{hr_range[1]} bpm)")
             return False, "Heart rate values outside normal range"
 
         if np.any((motion_data.values < motion_range[0]) | (motion_data.values > motion_range[1])):
-            logger.warning(f"Subject {subject_id}: Motion values outside normal range ({
-                           motion_range[0]}g to {motion_range[1]}g)")
+            logger.warning(f"Subject {subject_id}: Motion values outside normal range ({motion_range[0]}g to {motion_range[1]}g)")
             return False, "Motion values outside normal range"
 
         if np.any(steps_data.values < 0):
@@ -355,9 +352,8 @@ class DataChecker:
                     expected_interval = 1/expected_rate
                     actual_interval = 1/avg_rate
                     logger.warning(f"Subject {subject_id}: Irregular sampling rate in {name} data "
-                                   f"(expected: {expected_rate:.3f} Hz ({
-                        expected_interval:.1f}s), "
-                        f"actual: {avg_rate:.3f} Hz ({actual_interval:.1f}s))")
+                                   f"(expected: {expected_rate:.3f} Hz ({expected_interval:.1f}s), "
+                                   f"actual: {avg_rate:.3f} Hz ({actual_interval:.1f}s))")
                     return False, f"Irregular sampling rate in {name} data"
         return True, ""
 

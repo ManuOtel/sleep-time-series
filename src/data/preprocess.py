@@ -597,8 +597,7 @@ class DataPreprocessor:
                     f"Successfully preprocessed data for subject {subject_id}")
 
         except Exception as e:
-            logger.error(f"Error preprocessing data for subject {
-                         subject_id}: {str(e)}")
+            logger.error(f"Error preprocessing data for subject {subject_id}: {str(e)}")
 
     def preprocess_all_subjects(self, test: bool = True) -> None:
         """Preprocess data for all subjects in the input directory.

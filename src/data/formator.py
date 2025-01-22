@@ -23,6 +23,7 @@ The formatted HDF5 files are then used by the DataReader class for efficient dat
 """
 
 import h5py
+import json
 import logging
 import pandas as pd
 from pathlib import Path
@@ -192,6 +193,13 @@ class DataFormator:
             if self.verbose:
                 logger.info(f"Processing subject {i}/{len(subject_ids)}: {subject_id}")
             self.convert_subject_data(subject_id)
+        
+        subject_ids_file = self.output_dir / 'subject_ids.json'
+        with open(subject_ids_file, 'w') as f:
+            json.dump(subject_ids, f)
+        
+        if self.verbose:
+            logger.info(f"Saved {len(subject_ids)} subject IDs to {subject_ids_file}")
 
         if self.verbose:
             logger.info("Completed conversion for all subjects")
