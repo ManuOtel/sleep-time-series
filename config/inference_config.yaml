@@ -9,7 +9,7 @@ api:
 
 # Model configuration  
 model: # HERE PATH TO THE MODEL MUST RESPECT THE MODEL TYPE (TRANSFORMER(T) OR LSTM(M))
-  path: "./models/t_e10_lr0.0003_b512_f6/model.pth"  # Path to trained model weights
+  path: "./models/t_e5_lr0.001_b128_f0/model.pth"  # Path to trained model weights
   type: "transformer"  # Model architecture to use ['lstm', 'transformer']
 
 # Input validation settings

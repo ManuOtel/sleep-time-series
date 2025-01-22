@@ -312,15 +312,18 @@ async def predict(
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
-
+    if model is None:
+        return {"status": "unhealthy", "reason": "model not loaded"}
+    if isinstance(model, (SleepClassifierLSTM, SleepClassifierTransformer)):
+        return {"status": "healthy", "model_type": model.__class__.__name__}
+    return {"status": "unhealthy", "reason": "invalid model type"}
 
 @app.get("/version")
 async def version():
     return {
         "version": app.version,
-        "model_version": "1.0.0",
-        "api_version": "1.0.0"
+        "model_version": "0.1.0",
+        "api_version": "0.1.0"
     }
 
 if __name__ == "__main__":

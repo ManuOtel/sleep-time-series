@@ -1,5 +1,40 @@
 #!/bin/bash
 
+################################################################################
+#                                                                              #
+#                     Sleep Stage Classification Pipeline                      #
+#                                                                              #
+################################################################################
+#                                                                              #
+# This script orchestrates the full pipeline for training and deploying        #
+# a sleep stage classification system. It:                                     #
+#                                                                              #
+# 1. Downloads the PhysioNet Sleep-Accel dataset containing:                   #
+#    - Heart rate data from wrist-worn wearables                               #
+#    - Motion/accelerometer data                                               #
+#    - Step counts                                                             #
+#    - Sleep stage labels from polysomnography                                 #
+#                                                                              #
+# 2. Preprocesses the raw data:                                                #
+#    - Aligns and synchronizes different data streams                          #
+#    - Handles missing values and artifacts                                    #
+#    - Creates fixed-length sequences for model training                       #
+#                                                                              #
+# 3. Validates data quality and generates visualizations                       #
+#                                                                              #
+# 4. Trains deep learning models (Transformer & LSTM architectures)            #
+#    - Uses 10-fold cross validation                                           #
+#    - Supports distributed training                                           #
+#    - Saves model checkpoints                                                 #
+#                                                                              #
+# 5. Deploys trained model as REST API endpoint for real-time inference        #
+#                                                                              #
+# The script uses environment variables for configuration and creates          #
+# organized directory structures for data, models, logs and visualizations.    #
+#                                                                              #
+################################################################################
+
+
 # Exit on any error
 set -e
 
@@ -17,7 +52,7 @@ API_PORT=6969    # Used in STEP 8 for inference server
 
 
 ################################################################################
-        ### STEP 1 - Download the sleep-accel dataset from PhysioNet ###
+#       ### STEP 1 - Download the sleep-accel dataset from PhysioNet ###       #
 ################################################################################
 # Create data directories if they don't exist
 mkdir -p "${DATA_DIR}/original"
@@ -54,7 +89,7 @@ echo "Download complete. Data saved in ${DATA_DIR}/original/"
 
 
 ################################################################################
-                   ### STEP 2 - Format the data for training ###
+#                  ### STEP 2 - Format the data for training ###               #
 ################################################################################
 # Create formatted data directory if it doesn't exist
 mkdir -p "${DATA_DIR}/formated"
@@ -76,7 +111,7 @@ fi
 
 
 ################################################################################
-        ### STEP 3 - Create Visualizations of the original data ###
+#        ### STEP 3 - Create Visualizations of the original data ###           #
 ################################################################################
 # Check if original data visualizations already exist
 if [ -d "${VISUALIZATION_DIR}/data/original_view" ] && [ "$(ls -A ${VISUALIZATION_DIR}/data/original_view)" ]; then
@@ -100,7 +135,7 @@ fi
 
 
 ################################################################################
-                ### STEP 4 - Preprocess the formated data ###
+#                ### STEP 4 - Preprocess the formated data ###                 #
 ################################################################################
 # Check if preprocessed data already exists
 if [ -f "${DATA_DIR}/preprocessed/subject_ids.json" ] && [ -f "${DATA_DIR}/test/subject_ids.json" ]; then
@@ -127,7 +162,7 @@ fi
 
 
 ################################################################################
-        ### STEP 5 - Create Visualizations of the preprocessed data ###
+#       ### STEP 5 - Create Visualizations of the preprocessed data ###        #
 ################################################################################
 # Check if preprocessed data visualizations already exist
 if [ -d "${VISUALIZATION_DIR}/data/preprocessed_view" ] && [ "$(ls -A ${VISUALIZATION_DIR}/data/preprocessed_view)" ]; then
@@ -151,7 +186,7 @@ fi
 
 
 ################################################################################
-            ### STEP 6 - Check the data for invalid samples ###
+#            ### STEP 6 - Check the data for invalid samples ###               #
 ################################################################################
 # Create directory for data check logs
 mkdir -p "${LOGS_DIR}/data_check"
@@ -170,7 +205,7 @@ echo "Invalid files have been renamed with 'INVALID_' prefix in both test and pr
 
 
 ################################################################################
-        ### STEP 7 - Start the training process for the model ###
+#        ### STEP 7 - Start the training process for the model ###             #
 ################################################################################
 # Create directories for model outputs and logs
 mkdir -p "${MODEL_DIR}"
@@ -207,7 +242,7 @@ fi
 
 
 ################################################################################
-        ### STEP 8 - Start an inference endpoint for the model ###
+#        ### STEP 8 - Start an inference endpoint for the model ###            #
 ################################################################################
 # Create directory for inference logs
 mkdir -p "${LOGS_DIR}/inference"

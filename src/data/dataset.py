@@ -78,7 +78,7 @@ class SleepDataset(Dataset):
             FileNotFoundError: If data directory or subject_ids.json not found
             ValueError: If invalid fold_id, valid_ratio or split parameters
         """
-
+        self.file_handles = []
         # Add number of sleep stages (classes)
         self.num_classes = 5  # Assuming 5 sleep stages (0-4)
 
@@ -285,11 +285,13 @@ class SleepDataset(Dataset):
         return self.sequences[idx], self.labels[idx]
 
     def __del__(self):
-        for handle in self.file_handles:
-            try:
-                handle.close()
-            except:
-                pass
+        """Clean up file handles on object destruction"""
+        if hasattr(self, 'file_handles'):  # Check if attribute exists
+            for handle in self.file_handles:
+                try:
+                    handle.close()
+                except:
+                    pass
 
     def cleanup(self):
         self.__del__()
