@@ -11,6 +11,7 @@ This system processes wearable device data from the [PhysioNet Sleep-Accel Datas
 - Real-time inference API endpoint
 - Visualization tools for data analysis
 - Comprehensive testing and validation framework
+> 📖 For a detailed technical explanation of the system architecture, data processing pipeline, and model performance analysis, please see [README.MD](docs/README.MD).
 
 ## Quick Start
 
@@ -54,6 +55,7 @@ chmod +x run.sh
 - `visualizations/` - Generated data visualizations
 - `logs/` - Training and inference logs
 - `docker/` - Docker-related files and mounted volumes
+- `docs/` - Detailed documentation and analysis
 
 ## API Usage
 
@@ -73,10 +75,12 @@ curl -X POST http://localhost:6969/predict \
 
 ## Model Performance
 
-The system achieves competitive accuracy on sleep stage classification:
-- Average accuracy: ~90-95%
-- REM sleep detection accuracy: >70%
-- Results validated across multiple training runs
+The system achieves strong performance on sleep stage classification:
+- LSTM models: 93.74% average test accuracy
+- Transformer models: 93.24% average test accuracy
+- Best individual run: 96.92% test accuracy (LSTM)
+
+> ⚠️ Note: These accuracy metrics are for single-step prediction using ground truth labels as context. See [README.MD](docs/README.MD) for important details about evaluation methodology.
 
 ## Development
 

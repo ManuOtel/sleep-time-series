@@ -187,7 +187,6 @@ cython_debug/
 /visualizations/
 
 # Elon's Maps
-/docs/*
 test_plan.md
 plan.md
 track.md
