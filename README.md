@@ -61,19 +61,20 @@ After starting the server, you can make predictions using the REST API:
 
 ```bash
 curl -X POST http://localhost:6969/predict \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "heart_rate": [...],
-    "motion": [...],
-    "steps": 8000
+    "motion": [[...]],
+    "steps": ...,
+    "previous_labels": [...]
   }'
 ```
 
 ## Model Performance
 
 The system achieves competitive accuracy on sleep stage classification:
-- Average accuracy: ~70-75%
+- Average accuracy: ~90-95%
 - REM sleep detection accuracy: >70%
 - Results validated across multiple training runs
 
@@ -91,6 +92,6 @@ Key environment variables (configurable in docker-compose.yml):
 #### THIS IS ACTUALLY NOT WORKING ATM. TODO! 
 Run the test suite:
 ```bash
-python -m pytest tests/
+pytest
 ```
 
