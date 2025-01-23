@@ -22,11 +22,11 @@ The results are used to select optimal models and inform future architecture dec
 """
 
 
+import os
 import numpy as np
 from scipy import stats
-import matplotlib.pyplot as plt
 from typing import Dict, List
-import os
+import matplotlib.pyplot as plt
 
 class TrainingAnalyzer:
     def __init__(self, history: Dict[str, List[float]]) -> None:

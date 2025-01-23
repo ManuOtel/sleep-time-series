@@ -125,11 +125,11 @@ For future work, it'd be super interesting to:
 
 Alright, let's look at how our models actually performed! I ran a bunch of cross-validation experiments and here's what I found:
 
-The headline numbers:
+#### The headline numbers:
 - LSTM models averaged 93.74% test accuracy
 - Transformer models weren't far behind at 93.24%
 
-The best individual runs were pretty impressive:
+#### The best individual runs were pretty impressive:
 1. Our top LSTM (learning rate 0.0003, batch size 128) hit:
     - 96.92% test accuracy
     - 0.1491 test loss
@@ -137,16 +137,31 @@ The best individual runs were pretty impressive:
     - 96.70% test accuracy
     - 0.1500 test loss
 
-Looking at the cross-fold stats:
+#### Looking at the cross-fold stats:
 - Average accuracy across all folds was 93.32%
 - With a standard deviation of 2.26%
 
-The winning configuration was:
-- LSTM architecture
-- Learning rate of 0.0003
+#### The winning configuration was:
+- LSTM architecture (model type 'm')
+- Learning rate of 0.0003 
 - Batch size of 128
+- Trained for 10 epochs
+- Achieved:
+  - 96.92% test accuracy
+  - 0.1491 test loss
+  - Folder: m_e10_lr0.0003_b128_f1
 
-What's cool is how evenly matched they were across folds:
+#### This configuration showed:
+- Strong convergence dynamics with steady improvement
+- Minimal train-validation accuracy gap, indicating good generalization
+- Consistent performance across multiple folds
+- Statistically significant improvement over random baseline (p < 0.05)
+- Good stability metrics:
+  - High improvement rate across epochs
+  - Low variance in performance
+  - Strong trend consistency (high Kendall's tau)
+
+#### What's cool is how evenly matched both model types were across folds:
 - LSTM won in 5 folds (0,1,2,3,5)
 - Transformer won in 5 folds (4,6,7,8,9)
 

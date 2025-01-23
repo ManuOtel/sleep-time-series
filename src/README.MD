@@ -69,7 +69,7 @@ data = {
 }
 
 response = requests.post(
-    "http://localhost:8000/predict",  # Default FastAPI port
+    "http://localhost:6969/predict",  # Default FastAPI port
     json=data,
     headers={"X-API-Key": "your-api-key"}
 )
