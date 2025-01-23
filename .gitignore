@@ -187,10 +187,11 @@ cython_debug/
 /visualizations/
 
 # Elon's Maps
+/docs/*
+test_plan.md
 plan.md
 track.md
 pip_req.py
 check.py
 backup/
 *_code.py
-/docs
